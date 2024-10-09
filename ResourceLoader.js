@@ -12,6 +12,7 @@ const ResourceLoader = (() => {
       cacheBusting = false,
       restrictCacheBustingToLocal = true,
       appendToBody = false,
+      crossorigin = false,
     } = options;
 
     // Helper function to load a single resource
@@ -61,11 +62,17 @@ const ResourceLoader = (() => {
             element = document.createElement("script");
             element.src = finalUrl;
             element.async = true;
+            if (crossorigin) {
+              element.crossOrigin = crossorigin;
+            }
             break;
           case "css":
             element = document.createElement("link");
             element.href = finalUrl;
             element.rel = "stylesheet";
+            if (crossorigin) {
+              element.crossOrigin = crossorigin;
+            }
             break;
           case "json":
             fetch(finalUrl, { signal })
@@ -89,10 +96,15 @@ const ResourceLoader = (() => {
           case "svg":
             element = document.createElement("img");
             element.src = finalUrl;
+            if (crossorigin) {
+              element.crossOrigin = crossorigin;
+            }
             break;
           case "woff":
           case "woff2":
-            const fontFace = new FontFace("customFont", `url(${finalUrl})`);
+            const fontFace = new FontFace("customFont", `url(${finalUrl})`, {
+              crossOrigin: crossorigin,
+            });
             fontFace
               .load()
               .then(() => {
