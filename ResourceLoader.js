@@ -74,19 +74,6 @@ const ResourceLoader = (() => {
         ? `${url}?_=${new Date().getTime()}`
         : url;
 
-      // Search in both head and body to prevent duplicates
-      const existingElement =
-        document.head.querySelector(
-          `[src="${finalUrl}"], [href="${finalUrl}"]`
-        ) ||
-        document.body.querySelector(
-          `[src="${finalUrl}"], [href="${finalUrl}"]`
-        );
-      if (existingElement) {
-        console.log(`Resource already loaded: ${finalUrl}`);
-        return Promise.resolve(); // Avoid re-loading the same resource
-      }
-
       const controller = new AbortController();
       const { signal } = controller;
 
@@ -98,6 +85,19 @@ const ResourceLoader = (() => {
         const fileType = url.split(".").pop().toLowerCase();
         let element;
         let timeoutId;
+
+        const existingElement =
+          document.head.querySelector(
+            `[src="${finalUrl}"], [href="${finalUrl}"]`
+          ) ||
+          document.body.querySelector(
+            `[src="${finalUrl}"], [href="${finalUrl}"]`
+          );
+        if (existingElement) {
+          console.log(`Resource already loaded: ${finalUrl}`);
+          resolve();
+          return;
+        }
 
         const handleTimeout = () => {
           timedOut = true;
