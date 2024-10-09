@@ -5,12 +5,20 @@ async function include(url, options = {}) {
     return resourceLoadedPromises[url];
   }
 
+  const { attributes = {}, timeout = 10000, cacheBusting = false } = options;
+  const finalUrl = cacheBusting ? `${url}?_=${new Date().getTime()}` : url;
+
   resourceLoadedPromises[url] = new Promise((resolve, reject) => {
     const fileType = url.split(".").pop();
     let element;
+    let timeoutId;
 
-    const { attributes = {}, timeout = 10000, cacheBusting = false } = options;
-    const finalUrl = cacheBusting ? `${url}?_=${new Date().getTime()}` : url;
+    const handleTimeout = () => {
+      reject(new Error(`Resource loading timeout: ${finalUrl}`));
+      if (element) {
+        element.remove();
+      }
+    };
 
     if (fileType === "js") {
       element = document.createElement("script");
@@ -31,14 +39,11 @@ async function include(url, options = {}) {
       return;
     }
 
-    // Apply additional attributes (like integrity or media queries)
     Object.keys(attributes).forEach((key) => {
       element.setAttribute(key, attributes[key]);
     });
 
-    const timeoutId = setTimeout(() => {
-      reject(new Error(`Resource loading timeout: ${finalUrl}`));
-    }, timeout);
+    timeoutId = setTimeout(handleTimeout, timeout);
 
     element.onload = () => {
       clearTimeout(timeoutId);
@@ -58,7 +63,6 @@ async function include(url, options = {}) {
   return resourceLoadedPromises[url];
 }
 
-// Cleanup function
 function unloadResource(url) {
   const elements = document.head.querySelectorAll(
     `[src="${url}"], [href="${url}"]`
