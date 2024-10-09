@@ -13,13 +13,18 @@ const ResourceLoader = (() => {
       restrictCacheBustingToLocal = true,
       appendToBody = false,
     } = options;
-
     const isLocalResource = url.startsWith(window.location.origin);
     const applyCacheBusting =
       cacheBusting && (!restrictCacheBustingToLocal || isLocalResource);
     const finalUrl = applyCacheBusting
       ? `${url}?_=${new Date().getTime()}`
       : url;
+
+    // Create an AbortController to support cancellation for fetch requests
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    let cancel;
 
     resourceLoadedPromises[url] = new Promise((resolve, reject) => {
       const fileType = url.split(".").pop().toLowerCase();
@@ -54,10 +59,17 @@ const ResourceLoader = (() => {
           element.rel = "stylesheet";
           break;
         case "json":
-          fetch(finalUrl)
+          fetch(finalUrl, { signal })
             .then((response) => response.json())
             .then(resolve)
-            .catch(reject);
+            .catch((error) => {
+              if (error.name === "AbortError") {
+                console.log(`Fetch aborted for: ${finalUrl}`);
+              } else {
+                reject(error);
+              }
+            });
+          cancel = () => controller.abort();
           return;
         case "jpg":
         case "jpeg":
@@ -69,7 +81,6 @@ const ResourceLoader = (() => {
           break;
         case "woff":
         case "woff2":
-          // Load font using FontFace API
           const fontFace = new FontFace("customFont", `url(${finalUrl})`);
           fontFace
             .load()
@@ -78,16 +89,22 @@ const ResourceLoader = (() => {
               resolve();
             })
             .catch(reject);
-          return; // Font doesn't append a DOM element
+          return;
         case "pdf":
         case "zip":
         case "bin":
-          // Fetch binary files (like .pdf or .zip)
-          fetch(finalUrl)
+          fetch(finalUrl, { signal })
             .then((response) => response.blob())
             .then(resolve)
-            .catch(reject);
-          return; // Binary files don't append to the DOM
+            .catch((error) => {
+              if (error.name === "AbortError") {
+                console.log(`Fetch aborted for: ${finalUrl}`);
+              } else {
+                reject(error);
+              }
+            });
+          cancel = () => controller.abort();
+          return;
         default:
           reject(new Error(`Unsupported file type: ${fileType}`));
           return;
@@ -97,6 +114,7 @@ const ResourceLoader = (() => {
         element.setAttribute(key, attributes[key]);
       });
 
+      // Set up a timeout to reject if the resource takes too long
       timeoutId = setTimeout(handleTimeout, timeout);
 
       element.onload = () => {
@@ -111,7 +129,6 @@ const ResourceLoader = (() => {
         reject(new Error(`Failed to load resource ${finalUrl}`));
       };
 
-      // Append the element to <body> or <head> based on the option
       if (element.tagName) {
         if (appendToBody && fileType === "js") {
           document.body.appendChild(element);
@@ -119,9 +136,23 @@ const ResourceLoader = (() => {
           document.head.appendChild(element);
         }
       }
+
+      // Set cancel as removing the element for non-fetch resources
+      cancel = () => {
+        clearTimeout(timeoutId);
+        if (element && element.parentNode) {
+          element.parentNode.removeChild(element);
+          console.log(`Loading cancelled and element removed: ${finalUrl}`);
+        }
+      };
     });
 
-    return resourceLoadedPromises[url];
+    resourceLoadedPromises[url] = {
+      promise: resourceLoadedPromises[url],
+      cancel,
+    };
+
+    return resourceLoadedPromises[url].promise;
   }
 
   function unloadResource(url) {
@@ -136,8 +167,17 @@ const ResourceLoader = (() => {
     }
   }
 
+  function cancelResource(url) {
+    if (resourceLoadedPromises[url] && resourceLoadedPromises[url].cancel) {
+      resourceLoadedPromises[url].cancel();
+      delete resourceLoadedPromises[url];
+      console.log(`Resource ${url} loading cancelled.`);
+    }
+  }
+
   return {
     include,
     unloadResource,
+    cancelResource,
   };
 })();
