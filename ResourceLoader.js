@@ -25,9 +25,44 @@ const ResourceLoader = (() => {
     });
   }
 
+  function categorizeError(error, fileType, url) {
+    if (error.name === "AbortError") {
+      return { type: "abort", message: `Fetch aborted for: ${url}` };
+    } else if (error.message.includes("timeout")) {
+      return { type: "timeout", message: `Timeout while loading: ${url}` };
+    } else if (
+      fileType &&
+      ![
+        "js",
+        "css",
+        "json",
+        "jpg",
+        "jpeg",
+        "png",
+        "gif",
+        "svg",
+        "woff",
+        "woff2",
+        "pdf",
+        "zip",
+        "bin",
+      ].includes(fileType)
+    ) {
+      return {
+        type: "unsupported",
+        message: `Unsupported file type: ${fileType} for ${url}`,
+      };
+    } else {
+      return {
+        type: "network",
+        message: `Network error or resource not found: ${url}`,
+      };
+    }
+  }
+
   async function include(urls, options = {}) {
     if (!Array.isArray(urls)) {
-      urls = [urls]; // Convert to array if single resource
+      urls = [urls];
     }
 
     const {
@@ -62,7 +97,7 @@ const ResourceLoader = (() => {
         let element;
         let timeoutId;
 
-        const existingElement = document.head.querySelector(
+        const existingElement = document.querySelector(
           `[src="${finalUrl}"], [href="${finalUrl}"]`
         );
         if (existingElement) {
@@ -73,7 +108,8 @@ const ResourceLoader = (() => {
 
         const handleTimeout = () => {
           timedOut = true;
-          reject(new Error(`Resource loading timeout: ${finalUrl}`));
+          const error = new Error(`Timeout while loading: ${finalUrl}`);
+          reject(categorizeError(error, fileType, finalUrl));
           if (element) {
             element.remove();
           }
@@ -105,11 +141,7 @@ const ResourceLoader = (() => {
                 if (!timedOut) resolve(data);
               })
               .catch((error) => {
-                if (error.name === "AbortError") {
-                  console.log(`Fetch aborted for: ${finalUrl}`);
-                } else {
-                  reject(error);
-                }
+                reject(categorizeError(error, fileType, finalUrl));
               });
             cancel = () => controller.abort();
             return;
@@ -138,7 +170,9 @@ const ResourceLoader = (() => {
                   resolve();
                 }
               })
-              .catch(reject);
+              .catch((error) =>
+                reject(categorizeError(error, fileType, finalUrl))
+              );
             return;
           case "pdf":
           case "zip":
@@ -149,16 +183,18 @@ const ResourceLoader = (() => {
                 if (!timedOut) resolve(data);
               })
               .catch((error) => {
-                if (error.name === "AbortError") {
-                  console.log(`Fetch aborted for: ${finalUrl}`);
-                } else {
-                  reject(error);
-                }
+                reject(categorizeError(error, fileType, finalUrl));
               });
             cancel = () => controller.abort();
             return;
           default:
-            reject(new Error(`Unsupported file type: ${fileType}`));
+            reject(
+              categorizeError(
+                new Error("Unsupported file type"),
+                fileType,
+                finalUrl
+              )
+            );
             return;
         }
 
@@ -172,12 +208,9 @@ const ResourceLoader = (() => {
           }
         };
 
-        element.onerror = () => {
-          if (!timedOut) {
-            clearTimeout(timeoutId);
-            console.error(`Failed to load resource from: ${finalUrl}`);
-            reject(new Error(`Failed to load resource ${finalUrl}`));
-          }
+        element.onerror = (error) => {
+          clearTimeout(timeoutId);
+          reject(categorizeError(error, fileType, finalUrl));
         };
 
         if (element.tagName) {
