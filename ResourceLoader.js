@@ -88,12 +88,14 @@ const ResourceLoader = (() => {
       appendToBody = false,
       crossorigin = false,
       logLevel = "warn",
-      onError = null, // New error callback
+      onError = null,
+      retries = 0, // Number of retries for failed loads
+      retryDelay = 1000, // Delay between retry attempts (in ms)
     } = options;
 
     setLoggingLevel(logLevel);
 
-    const loadResource = (url) => {
+    const loadResource = (url, retryCount = 0) => {
       if (resourceLoadedPromises[url]) {
         return resourceLoadedPromises[url].promise;
       }
@@ -139,10 +141,14 @@ const ResourceLoader = (() => {
           const categorizedError = categorizeError(error, fileType, finalUrl);
           reject(categorizedError);
           resourceStates[url] = "unloaded";
-          if (onError) onError(categorizedError); // Invoke custom error handler
+          if (onError) onError(categorizedError);
           if (element && startedLoading) {
             element.remove();
             log(`Resource load aborted due to timeout: ${finalUrl}`, "warn");
+          }
+          if (retryCount < retries) {
+            log(`Retrying to load resource: ${finalUrl}`, "warn");
+            setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
           }
         };
 
@@ -179,7 +185,14 @@ const ResourceLoader = (() => {
                   finalUrl
                 );
                 reject(categorizedError);
-                if (onError) onError(categorizedError); // Invoke custom error handler
+                if (onError) onError(categorizedError);
+                if (retryCount < retries) {
+                  log(`Retrying to load resource: ${finalUrl}`, "warn");
+                  setTimeout(
+                    () => loadResource(url, retryCount + 1),
+                    retryDelay
+                  );
+                }
               });
             cancel = () => controller.abort();
             return;
@@ -215,7 +228,14 @@ const ResourceLoader = (() => {
                   finalUrl
                 );
                 reject(categorizedError);
-                if (onError) onError(categorizedError); // Invoke custom error handler
+                if (onError) onError(categorizedError);
+                if (retryCount < retries) {
+                  log(`Retrying to load resource: ${finalUrl}`, "warn");
+                  setTimeout(
+                    () => loadResource(url, retryCount + 1),
+                    retryDelay
+                  );
+                }
               });
             return;
           case "pdf":
@@ -236,7 +256,14 @@ const ResourceLoader = (() => {
                   finalUrl
                 );
                 reject(categorizedError);
-                if (onError) onError(categorizedError); // Invoke custom error handler
+                if (onError) onError(categorizedError);
+                if (retryCount < retries) {
+                  log(`Retrying to load resource: ${finalUrl}`, "warn");
+                  setTimeout(
+                    () => loadResource(url, retryCount + 1),
+                    retryDelay
+                  );
+                }
               });
             cancel = () => controller.abort();
             return;
@@ -247,7 +274,11 @@ const ResourceLoader = (() => {
               finalUrl
             );
             reject(unsupportedError);
-            if (onError) onError(unsupportedError); // Invoke custom error handler
+            if (onError) onError(unsupportedError);
+            if (retryCount < retries) {
+              log(`Retrying to load resource: ${finalUrl}`, "warn");
+              setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
+            }
             return;
         }
 
@@ -277,7 +308,11 @@ const ResourceLoader = (() => {
           log(`Failed to load resource from: ${finalUrl}`, "warn");
           resourceStates[url] = "unloaded";
           reject(categorizedError);
-          if (onError) onError(categorizedError); // Invoke custom error handler
+          if (onError) onError(categorizedError);
+          if (retryCount < retries) {
+            log(`Retrying to load resource: ${finalUrl}`, "warn");
+            setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
+          }
         };
 
         if (element.tagName) {
