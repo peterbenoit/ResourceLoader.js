@@ -10,37 +10,70 @@ const ResourceLoader = (() => {
     const finalUrl = cacheBusting ? `${url}?_=${new Date().getTime()}` : url;
 
     resourceLoadedPromises[url] = new Promise((resolve, reject) => {
-      const fileType = url.split(".").pop();
+      const fileType = url.split(".").pop().toLowerCase();
       let element;
       let timeoutId;
 
       const handleTimeout = () => {
         reject(new Error(`Resource loading timeout: ${finalUrl}`));
         if (element) {
-          element.remove(); // Remove the element if it times out
+          element.remove();
         }
       };
 
-      if (fileType === "js") {
-        element = document.createElement("script");
-        element.src = finalUrl;
-        element.async = true;
-      } else if (fileType === "css") {
-        element = document.createElement("link");
-        element.href = finalUrl;
-        element.rel = "stylesheet";
-      } else if (fileType === "json") {
-        fetch(finalUrl)
-          .then((response) => response.json())
-          .then(resolve)
-          .catch(reject);
-        return;
-      } else {
-        reject(new Error(`Unsupported file type: ${fileType}`));
-        return;
+      // Determine how to handle different file types
+      switch (fileType) {
+        case "js":
+          element = document.createElement("script");
+          element.src = finalUrl;
+          element.async = true;
+          break;
+        case "css":
+          element = document.createElement("link");
+          element.href = finalUrl;
+          element.rel = "stylesheet";
+          break;
+        case "json":
+          fetch(finalUrl)
+            .then((response) => response.json())
+            .then(resolve)
+            .catch(reject);
+          return;
+        case "jpg":
+        case "jpeg":
+        case "png":
+        case "gif":
+        case "svg":
+          element = document.createElement("img");
+          element.src = finalUrl;
+          break;
+        case "woff":
+        case "woff2":
+          // Dynamically inject font-face rules
+          const fontFace = new FontFace("customFont", `url(${finalUrl})`);
+          fontFace
+            .load()
+            .then(() => {
+              document.fonts.add(fontFace);
+              resolve();
+            })
+            .catch(reject);
+          return;
+        case "pdf":
+        case "zip":
+        case "bin":
+          // Fetch binary files (like .pdf or .zip)
+          fetch(finalUrl)
+            .then((response) => response.blob())
+            .then(resolve)
+            .catch(reject);
+          return;
+        default:
+          reject(new Error(`Unsupported file type: ${fileType}`));
+          return;
       }
 
-      // Apply additional attributes (like integrity or media queries)
+      // Apply additional attributes (like integrity, media queries, etc.)
       Object.keys(attributes).forEach((key) => {
         element.setAttribute(key, attributes[key]);
       });
@@ -60,7 +93,10 @@ const ResourceLoader = (() => {
         reject(new Error(`Failed to load resource ${finalUrl}`));
       };
 
-      document.head.appendChild(element);
+      // Append to DOM if it’s a DOM element (e.g., JS, CSS, Image)
+      if (element.tagName) {
+        document.head.appendChild(element);
+      }
     });
 
     return resourceLoadedPromises[url];
