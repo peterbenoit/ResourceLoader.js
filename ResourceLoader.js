@@ -6,15 +6,14 @@ const ResourceLoader = (() => {
       return resourceLoadedPromises[url];
     }
 
-    // Options for cache busting, timeout, etc.
     const {
       attributes = {},
       timeout = 10000,
       cacheBusting = false,
       restrictCacheBustingToLocal = true,
+      appendToBody = false,
     } = options;
 
-    // Determine if cache busting should be applied
     const isLocalResource = url.startsWith(window.location.origin);
     const applyCacheBusting =
       cacheBusting && (!restrictCacheBustingToLocal || isLocalResource);
@@ -27,15 +26,22 @@ const ResourceLoader = (() => {
       let element;
       let timeoutId;
 
-      // Function to handle timeout
+      const existingElement = document.head.querySelector(
+        `[src="${finalUrl}"], [href="${finalUrl}"]`
+      );
+      if (existingElement) {
+        console.log(`Resource already loaded: ${finalUrl}`);
+        resolve();
+        return;
+      }
+
       const handleTimeout = () => {
         reject(new Error(`Resource loading timeout: ${finalUrl}`));
         if (element) {
-          element.remove(); // Remove the element if timeout occurs
+          element.remove();
         }
       };
 
-      // Handle different resource types
       switch (fileType) {
         case "js":
           element = document.createElement("script");
@@ -52,7 +58,7 @@ const ResourceLoader = (() => {
             .then((response) => response.json())
             .then(resolve)
             .catch(reject);
-          return; // JSON does not need to append to the document
+          return;
         case "jpg":
         case "jpeg":
         case "png":
@@ -87,40 +93,39 @@ const ResourceLoader = (() => {
           return;
       }
 
-      // Apply additional attributes (like integrity, async, media, etc.)
       Object.keys(attributes).forEach((key) => {
         element.setAttribute(key, attributes[key]);
       });
 
-      // Set up a timeout to reject if the resource takes too long
       timeoutId = setTimeout(handleTimeout, timeout);
 
-      // Handle successful resource loading
       element.onload = () => {
-        clearTimeout(timeoutId); // Cancel the timeout if loaded successfully
+        clearTimeout(timeoutId);
         console.log(`Resource loaded from: ${finalUrl}`);
         resolve();
       };
 
-      // Handle resource load error
       element.onerror = () => {
-        clearTimeout(timeoutId); // Cancel the timeout if an error occurs
+        clearTimeout(timeoutId);
         console.error(`Failed to load resource from: ${finalUrl}`);
         reject(new Error(`Failed to load resource ${finalUrl}`));
       };
 
-      // Append the resource to the document head if it's a DOM element (e.g., JS, CSS, Image)
+      // Append the element to <body> or <head> based on the option
       if (element.tagName) {
-        document.head.appendChild(element);
+        if (appendToBody && fileType === "js") {
+          document.body.appendChild(element);
+        } else {
+          document.head.appendChild(element);
+        }
       }
     });
 
     return resourceLoadedPromises[url];
   }
 
-  // Cleanup function to remove loaded resources from the DOM and clear cache
   function unloadResource(url) {
-    const elements = document.head.querySelectorAll(
+    const elements = document.querySelectorAll(
       `[src="${url}"], [href="${url}"]`
     );
     elements.forEach((element) => element.remove());
