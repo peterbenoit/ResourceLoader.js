@@ -336,25 +336,28 @@ const ResourceLoader = (() => {
         };
       };
 
-      // Cleanup for the `DOMContentLoaded` event listener
-      const handleDOMContentLoaded = () => {
-        log(`Deferring script load until DOM ready: ${finalUrl}`, "verbose");
-        loadScriptWhenReady();
-        window.removeEventListener("DOMContentLoaded", handleDOMContentLoaded);
-      };
-
       if (
         fileType === "js" &&
         deferScriptsUntilReady &&
         document.readyState !== "complete"
       ) {
-        window.addEventListener("DOMContentLoaded", handleDOMContentLoaded);
+        window.addEventListener("DOMContentLoaded", () => {
+          log(`Deferring script load until DOM ready: ${finalUrl}`, "verbose");
+          loadScriptWhenReady();
+        });
       } else {
         loadScriptWhenReady();
       }
 
+      // Store the resource load promise to prevent duplicates
       resourceLoadedPromises[url] = {
-        promise: new Promise(loadScriptWhenReady),
+        promise: new Promise((resolve, reject) => {
+          loadScriptWhenReady(resolve, reject);
+        }).catch((err) => {
+          // Handle the failure gracefully
+          log(`Error loading resource: ${url}`, "warn");
+          return Promise.resolve(); // Return a resolved promise to not break the chain
+        }),
         cancel,
       };
 
