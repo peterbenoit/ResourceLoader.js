@@ -1,5 +1,6 @@
 const ResourceLoader = (() => {
   let resourceLoadedPromises = {};
+  let resourceStates = {}; // New object to track resource states
 
   function applyAttributes(element, attributes) {
     Object.keys(attributes).forEach((key) => {
@@ -57,8 +58,8 @@ const ResourceLoader = (() => {
       attributes = {},
       timeout = 10000,
       cacheBusting = false,
-      cacheBustingQuery = `?_=${new Date().getTime()}`, // customizable cache-busting query
-      cacheBustingTypes = ["js", "css"], // resource types to apply cache-busting to
+      cacheBustingQuery = `?_=${new Date().getTime()}`,
+      cacheBustingTypes = ["js", "css"],
       restrictCacheBustingToLocal = true,
       appendToBody = false,
       crossorigin = false,
@@ -68,6 +69,8 @@ const ResourceLoader = (() => {
       if (resourceLoadedPromises[url]) {
         return resourceLoadedPromises[url].promise;
       }
+
+      resourceStates[url] = "loading"; // Track state
 
       const isLocalResource = url.startsWith(window.location.origin);
       const fileType = url.split(".").pop().toLowerCase();
@@ -97,6 +100,7 @@ const ResourceLoader = (() => {
           );
         if (existingElement) {
           console.log(`Resource already loaded: ${finalUrl}`);
+          resourceStates[url] = "loaded"; // Mark as loaded
           resolve();
           return;
         }
@@ -105,6 +109,7 @@ const ResourceLoader = (() => {
           timedOut = true;
           const error = new Error(`Timeout while loading: ${finalUrl}`);
           reject(error);
+          resourceStates[url] = "unloaded"; // Mark as unloaded due to timeout
           if (element && startedLoading) {
             element.remove();
             console.log(`Resource load aborted due to timeout: ${finalUrl}`);
@@ -132,7 +137,10 @@ const ResourceLoader = (() => {
             fetch(finalUrl, { signal })
               .then((response) => response.json())
               .then((data) => {
-                if (!timedOut) resolve(data);
+                if (!timedOut) {
+                  resourceStates[url] = "loaded"; // Mark as loaded
+                  resolve(data);
+                }
               })
               .catch((error) => {
                 reject(error);
@@ -160,6 +168,7 @@ const ResourceLoader = (() => {
               .then(() => {
                 if (!timedOut) {
                   document.fonts.add(fontFace);
+                  resourceStates[url] = "loaded"; // Mark as loaded
                   resolve();
                 }
               })
@@ -171,7 +180,10 @@ const ResourceLoader = (() => {
             fetch(finalUrl, { signal })
               .then((response) => response.blob())
               .then((data) => {
-                if (!timedOut) resolve(data);
+                if (!timedOut) {
+                  resourceStates[url] = "loaded"; // Mark as loaded
+                  resolve(data);
+                }
               })
               .catch((error) => {
                 reject(error);
@@ -193,6 +205,7 @@ const ResourceLoader = (() => {
           if (!timedOut) {
             clearTimeout(timeoutId);
             console.log(`Resource loaded from: ${finalUrl}`);
+            resourceStates[url] = "loaded"; // Mark as loaded
             resolve();
           }
         };
@@ -200,6 +213,7 @@ const ResourceLoader = (() => {
         element.onerror = () => {
           clearTimeout(timeoutId);
           console.error(`Failed to load resource from: ${finalUrl}`);
+          resourceStates[url] = "unloaded"; // Mark as unloaded due to error
           reject(new Error(`Failed to load resource ${finalUrl}`));
         };
 
@@ -216,6 +230,7 @@ const ResourceLoader = (() => {
           if (element && element.parentNode) {
             element.parentNode.removeChild(element);
             console.log(`Loading cancelled and element removed: ${finalUrl}`);
+            resourceStates[url] = "unloaded"; // Mark as unloaded due to cancellation
           }
         };
       });
@@ -242,6 +257,7 @@ const ResourceLoader = (() => {
     if (resourceLoadedPromises[url]) {
       delete resourceLoadedPromises[url];
       console.log(`Resource ${url} unloaded and cache cleared.`);
+      resourceStates[url] = "unloaded"; // Mark as unloaded
     }
   }
 
@@ -250,12 +266,19 @@ const ResourceLoader = (() => {
       resourceLoadedPromises[url].cancel();
       delete resourceLoadedPromises[url];
       console.log(`Resource ${url} loading cancelled.`);
+      resourceStates[url] = "unloaded"; // Mark as unloaded due to cancellation
     }
+  }
+
+  // New function to expose resource state to users
+  function getResourceState(url) {
+    return resourceStates[url] || "unloaded"; // Default to 'unloaded' if no state is tracked
   }
 
   return {
     include,
     unloadResource,
     cancelResource,
+    getResourceState, // Expose the function to get resource state
   };
 })();
