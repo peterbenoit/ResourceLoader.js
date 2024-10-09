@@ -57,6 +57,8 @@ const ResourceLoader = (() => {
       attributes = {},
       timeout = 10000,
       cacheBusting = false,
+      cacheBustingQuery = `?_=${new Date().getTime()}`, // customizable cache-busting query
+      cacheBustingTypes = ["js", "css"], // resource types to apply cache-busting to
       restrictCacheBustingToLocal = true,
       appendToBody = false,
       crossorigin = false,
@@ -68,11 +70,12 @@ const ResourceLoader = (() => {
       }
 
       const isLocalResource = url.startsWith(window.location.origin);
+      const fileType = url.split(".").pop().toLowerCase();
       const applyCacheBusting =
-        cacheBusting && (!restrictCacheBustingToLocal || isLocalResource);
-      const finalUrl = applyCacheBusting
-        ? `${url}?_=${new Date().getTime()}`
-        : url;
+        cacheBusting &&
+        (!restrictCacheBustingToLocal || isLocalResource) &&
+        cacheBustingTypes.includes(fileType);
+      const finalUrl = applyCacheBusting ? `${url}${cacheBustingQuery}` : url;
 
       const controller = new AbortController();
       const { signal } = controller;
@@ -82,7 +85,6 @@ const ResourceLoader = (() => {
       let startedLoading = false;
 
       resourceLoadedPromises[url] = new Promise((resolve, reject) => {
-        const fileType = url.split(".").pop().toLowerCase();
         let element;
         let timeoutId;
 
