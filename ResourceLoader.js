@@ -204,135 +204,132 @@ const ResourceLoader = (() => {
               }
             };
 
-        switch (fileType) {
-          case "js":
-            element = document.createElement("script");
-            element.src = finalUrl;
-            element.async = true;
-            if (crossorigin) {
-              element.crossOrigin = crossorigin;
-            }
-            break;
-          case "css":
-            element = document.createElement("link");
-            element.href = finalUrl;
-            element.rel = "stylesheet";
-            if (crossorigin) {
-              element.crossOrigin = crossorigin;
-            }
-            break;
-          case "json":
-            fetch(finalUrl, { signal })
-              .then((response) => response.json())
-              .then((data) => {
-                if (!timedOut) {
-                  resourceStates[url] = "loaded";
-                  resolve(data);
+            switch (fileType) {
+              case "js":
+                element = document.createElement("script");
+                element.src = finalUrl;
+                element.async = true;
+                if (crossorigin) {
+                  element.crossOrigin = crossorigin;
                 }
-              })
-              .catch((error) => {
-                const categorizedError = categorizeError(
-                  error,
-                  fileType,
-                  finalUrl
+                break;
+              case "css":
+                element = document.createElement("link");
+                element.href = finalUrl;
+                element.rel = "stylesheet";
+                if (crossorigin) {
+                  element.crossOrigin = crossorigin;
+                }
+                break;
+              case "json":
+                fetch(finalUrl, { signal })
+                  .then((response) => response.json())
+                  .then((data) => {
+                    if (!timedOut) {
+                      resourceStates[url] = "loaded";
+                      resolve(data);
+                    }
+                  })
+                  .catch((error) => {
+                    const categorizedError = categorizeError(
+                      error,
+                      fileType,
+                      finalUrl
+                    );
+                    reject(categorizedError);
+                    if (onError) onError(categorizedError);
+                    if (retryCount < retries) {
+                      log(`Retrying to load resource: ${finalUrl}`, "warn");
+                      setTimeout(
+                        () => loadResource(url, retryCount + 1),
+                        retryDelay
+                      );
+                    }
+                  });
+                cancel = () => controller.abort();
+                return;
+              case "jpg":
+              case "jpeg":
+              case "png":
+              case "gif":
+              case "svg":
+                element = document.createElement("img");
+                element.src = finalUrl;
+                if (crossorigin) {
+                  element.crossOrigin = crossorigin;
+                }
+                break;
+              case "woff":
+              case "woff2":
+                const fontFace = new FontFace(
+                  "customFont",
+                  `url(${finalUrl})`,
+                  {
+                    crossOrigin: crossorigin,
+                  }
                 );
-                reject(categorizedError);
-                if (onError) onError(categorizedError);
-                if (retryCount < retries) {
-                  log(`Retrying to load resource: ${finalUrl}`, "warn");
-                  setTimeout(
-                    () => loadResource(url, retryCount + 1),
-                    retryDelay
-                  );
-                }
-              });
-            cancel = () => controller.abort();
-            return;
-          case "jpg":
-          case "jpeg":
-          case "png":
-          case "gif":
-          case "svg":
-            element = document.createElement("img");
-            element.src = finalUrl;
-            if (crossorigin) {
-              element.crossOrigin = crossorigin;
-            }
-            break;
-          case "woff":
-          case "woff2":
-            const fontFace = new FontFace("customFont", `url(${finalUrl})`, {
-              crossOrigin: crossorigin,
-            });
-            fontFace
-              .load()
-              .then(() => {
-                if (!timedOut) {
-                  document.fonts.add(fontFace);
-                  resourceStates[url] = "loaded";
-                  resolve();
-                }
-              })
-              .catch((error) => {
-                const categorizedError = categorizeError(
-                  error,
-                  fileType,
-                  finalUrl
+                fontFace
+                  .load()
+                  .then(() => {
+                    if (!timedOut) {
+                      document.fonts.add(fontFace);
+                      resourceStates[url] = "loaded";
+                      resolve();
+                    }
+                  })
+                  .catch((error) => {
+                    const categorizedError = categorizeError(
+                      error,
+                      fileType,
+                      finalUrl
+                    );
+                    reject(categorizedError);
+                    if (onError) onError(categorizedError);
+                    if (retryCount < retries) {
+                      log(`Retrying to load resource: ${finalUrl}`, "warn");
+                      setTimeout(
+                        () => loadResource(url, retryCount + 1),
+                        retryDelay
+                      );
+                    }
+                  });
+                return;
+              case "pdf":
+              case "zip":
+              case "bin":
+                fetch(finalUrl, { signal })
+                  .then((response) => response.blob())
+                  .then((data) => {
+                    if (!timedOut) {
+                      resourceStates[url] = "loaded";
+                      resolve(data);
+                    }
+                  })
+                  .catch((error) => {
+                    const categorizedError = categorizeError(
+                      error,
+                      fileType,
+                      finalUrl
+                    );
+                    reject(categorizedError);
+                    if (onError) onError(categorizedError);
+                    if (retryCount < retries) {
+                      log(`Retrying to load resource: ${finalUrl}`, "warn");
+                      setTimeout(
+                        () => loadResource(url, retryCount + 1),
+                        retryDelay
+                      );
+                    }
+                  });
+                cancel = () => controller.abort();
+                return;
+              default:
+                reject(new Error(`Unsupported file type: ${fileType}`));
+                log(
+                  `Failed to load unsupported file type: ${finalUrl}`,
+                  "error"
                 );
-                reject(categorizedError);
-                if (onError) onError(categorizedError);
-                if (retryCount < retries) {
-                  log(`Retrying to load resource: ${finalUrl}`, "warn");
-                  setTimeout(
-                    () => loadResource(url, retryCount + 1),
-                    retryDelay
-                  );
-                }
-              });
-            return;
-          case "pdf":
-          case "zip":
-          case "bin":
-            fetch(finalUrl, { signal })
-              .then((response) => response.blob())
-              .then((data) => {
-                if (!timedOut) {
-                  resourceStates[url] = "loaded";
-                  resolve(data);
-                }
-              })
-              .catch((error) => {
-                const categorizedError = categorizeError(
-                  error,
-                  fileType,
-                  finalUrl
-                );
-                reject(categorizedError);
-                if (onError) onError(categorizedError);
-                if (retryCount < retries) {
-                  log(`Retrying to load resource: ${finalUrl}`, "warn");
-                  setTimeout(
-                    () => loadResource(url, retryCount + 1),
-                    retryDelay
-                  );
-                }
-              });
-            cancel = () => controller.abort();
-            return;
-          default:
-            const unsupportedError = categorizeError(
-              new Error("Unsupported file type"),
-              fileType,
-              finalUrl
-            );
-            reject(unsupportedError);
-            if (onError) onError(unsupportedError);
-            if (retryCount < retries) {
-              log(`Retrying to load resource: ${finalUrl}`, "warn");
-              setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
             }
-            return;
-        }
 
             applyAttributes(element, attributes, fileType);
             startedLoading = true;
@@ -341,9 +338,19 @@ const ResourceLoader = (() => {
             element.onload = () => {
               if (!timedOut) {
                 clearTimeout(timeoutId);
-                log(`Resource loaded from: ${finalUrl}`, "verbose");
-                resourceStates[url] = "loaded";
-                resolve(); // Make sure resolve is correctly called here
+
+                // Check if resource was really loaded (some resources may trigger onload without being valid)
+                if (
+                  element.naturalWidth === 0 ||
+                  element.readyState === "complete"
+                ) {
+                  log(`Resource loaded from: ${finalUrl}`, "verbose");
+                  resourceStates[url] = "loaded";
+                  resolve();
+                } else {
+                  log(`Failed to load resource from: ${finalUrl}`, "error");
+                  reject(new Error(`Failed to load resource: ${finalUrl}`));
+                }
               }
             };
 
@@ -357,7 +364,7 @@ const ResourceLoader = (() => {
                 fileType,
                 finalUrl
               );
-              reject(categorizedError); // Ensure reject is called on error
+              reject(categorizedError);
               log(`Failed to load resource from: ${finalUrl}`, "warn");
               resourceStates[url] = "unloaded";
               if (retryCount < retries) {
