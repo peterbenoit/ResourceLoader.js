@@ -91,10 +91,28 @@ const ResourceLoader = (() => {
       onError = null,
       retries = 0,
       retryDelay = 1000,
-      deferScriptsUntilReady = true, // Defer JS script loading until DOM is ready
+      deferScriptsUntilReady = true,
+      batchSize = 5, // Limit number of concurrent resource loads
     } = options;
 
     setLoggingLevel(logLevel);
+
+    // Helper to load resources in batches
+    const loadInBatches = async (resources, loadFn, batchSize) => {
+      let index = 0;
+
+      const processNextBatch = async () => {
+        const batch = resources.slice(index, index + batchSize);
+        const batchPromises = batch.map(loadFn);
+        await Promise.all(batchPromises);
+        index += batchSize;
+        if (index < resources.length) {
+          await processNextBatch();
+        }
+      };
+
+      await processNextBatch();
+    };
 
     const loadResource = (url, retryCount = 0) => {
       if (resourceLoadedPromises[url]) {
@@ -339,7 +357,6 @@ const ResourceLoader = (() => {
         deferScriptsUntilReady &&
         document.readyState !== "complete"
       ) {
-        // Defer loading JS scripts until document is ready
         window.addEventListener("DOMContentLoaded", () => {
           log(`Deferring script load until DOM ready: ${finalUrl}`, "verbose");
           loadScriptWhenReady();
@@ -356,9 +373,8 @@ const ResourceLoader = (() => {
       return resourceLoadedPromises[url].promise;
     };
 
-    return urls.reduce((promiseChain, currentUrl) => {
-      return promiseChain.then(() => loadResource(currentUrl));
-    }, Promise.resolve());
+    // Process resources in batches
+    await loadInBatches(urls, loadResource, batchSize);
   }
 
   function unloadResource(url) {
