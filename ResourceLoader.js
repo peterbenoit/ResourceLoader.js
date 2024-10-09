@@ -1,17 +1,28 @@
 const ResourceLoader = (() => {
   let resourceLoadedPromises = {};
-  let resourceStates = {}; // New object to track resource states
+  let resourceStates = {};
 
-  function applyAttributes(element, attributes) {
-    Object.keys(attributes).forEach((key) => {
-      if (key in element) {
-        element.setAttribute(key, attributes[key]);
-      } else {
-        console.warn(
-          `Invalid attribute "${key}" for element type "${element.tagName}". Skipping.`
-        );
-      }
-    });
+  let loggingLevel = "warn";
+
+  function setLoggingLevel(level) {
+    const validLevels = ["silent", "warn", "verbose"];
+    if (validLevels.includes(level)) {
+      loggingLevel = level;
+    } else {
+      console.warn(`Invalid logging level: ${level}. Falling back to 'warn'.`);
+      loggingLevel = "warn";
+    }
+  }
+
+  function log(message, level = "verbose") {
+    if (loggingLevel === "verbose" && level === "verbose") {
+      console.log(message);
+    } else if (
+      loggingLevel === "warn" &&
+      (level === "warn" || level === "error")
+    ) {
+      console.warn(message);
+    }
   }
 
   function categorizeError(error, fileType, url) {
@@ -49,6 +60,19 @@ const ResourceLoader = (() => {
     }
   }
 
+  function applyAttributes(element, attributes) {
+    Object.keys(attributes).forEach((key) => {
+      if (key in element) {
+        element.setAttribute(key, attributes[key]);
+      } else {
+        log(
+          `Invalid attribute "${key}" for element type "${element.tagName}". Skipping.`,
+          "warn"
+        );
+      }
+    });
+  }
+
   async function include(urls, options = {}) {
     if (!Array.isArray(urls)) {
       urls = [urls];
@@ -63,14 +87,17 @@ const ResourceLoader = (() => {
       restrictCacheBustingToLocal = true,
       appendToBody = false,
       crossorigin = false,
+      logLevel = "warn",
     } = options;
+
+    setLoggingLevel(logLevel);
 
     const loadResource = (url) => {
       if (resourceLoadedPromises[url]) {
         return resourceLoadedPromises[url].promise;
       }
 
-      resourceStates[url] = "loading"; // Track state
+      resourceStates[url] = "loading";
 
       const isLocalResource = url.startsWith(window.location.origin);
       const fileType = url.split(".").pop().toLowerCase();
@@ -99,8 +126,8 @@ const ResourceLoader = (() => {
             `[src="${finalUrl}"], [href="${finalUrl}"]`
           );
         if (existingElement) {
-          console.log(`Resource already loaded: ${finalUrl}`);
-          resourceStates[url] = "loaded"; // Mark as loaded
+          log(`Resource already loaded: ${finalUrl}`, "verbose");
+          resourceStates[url] = "loaded";
           resolve();
           return;
         }
@@ -108,11 +135,11 @@ const ResourceLoader = (() => {
         const handleTimeout = () => {
           timedOut = true;
           const error = new Error(`Timeout while loading: ${finalUrl}`);
-          reject(error);
-          resourceStates[url] = "unloaded"; // Mark as unloaded due to timeout
+          reject(categorizeError(error, fileType, finalUrl));
+          resourceStates[url] = "unloaded";
           if (element && startedLoading) {
             element.remove();
-            console.log(`Resource load aborted due to timeout: ${finalUrl}`);
+            log(`Resource load aborted due to timeout: ${finalUrl}`, "warn");
           }
         };
 
@@ -138,12 +165,12 @@ const ResourceLoader = (() => {
               .then((response) => response.json())
               .then((data) => {
                 if (!timedOut) {
-                  resourceStates[url] = "loaded"; // Mark as loaded
+                  resourceStates[url] = "loaded";
                   resolve(data);
                 }
               })
               .catch((error) => {
-                reject(error);
+                reject(categorizeError(error, fileType, finalUrl));
               });
             cancel = () => controller.abort();
             return;
@@ -168,11 +195,13 @@ const ResourceLoader = (() => {
               .then(() => {
                 if (!timedOut) {
                   document.fonts.add(fontFace);
-                  resourceStates[url] = "loaded"; // Mark as loaded
+                  resourceStates[url] = "loaded";
                   resolve();
                 }
               })
-              .catch(reject);
+              .catch((error) => {
+                reject(categorizeError(error, fileType, finalUrl));
+              });
             return;
           case "pdf":
           case "zip":
@@ -181,17 +210,23 @@ const ResourceLoader = (() => {
               .then((response) => response.blob())
               .then((data) => {
                 if (!timedOut) {
-                  resourceStates[url] = "loaded"; // Mark as loaded
+                  resourceStates[url] = "loaded";
                   resolve(data);
                 }
               })
               .catch((error) => {
-                reject(error);
+                reject(categorizeError(error, fileType, finalUrl));
               });
             cancel = () => controller.abort();
             return;
           default:
-            reject(new Error(`Unsupported file type: ${fileType}`));
+            reject(
+              categorizeError(
+                new Error("Unsupported file type"),
+                fileType,
+                finalUrl
+              )
+            );
             return;
         }
 
@@ -204,17 +239,23 @@ const ResourceLoader = (() => {
         element.onload = () => {
           if (!timedOut) {
             clearTimeout(timeoutId);
-            console.log(`Resource loaded from: ${finalUrl}`);
-            resourceStates[url] = "loaded"; // Mark as loaded
+            log(`Resource loaded from: ${finalUrl}`, "verbose");
+            resourceStates[url] = "loaded";
             resolve();
           }
         };
 
         element.onerror = () => {
           clearTimeout(timeoutId);
-          console.error(`Failed to load resource from: ${finalUrl}`);
-          resourceStates[url] = "unloaded"; // Mark as unloaded due to error
-          reject(new Error(`Failed to load resource ${finalUrl}`));
+          log(`Failed to load resource from: ${finalUrl}`, "warn");
+          resourceStates[url] = "unloaded";
+          reject(
+            categorizeError(
+              new Error(`Failed to load resource`),
+              fileType,
+              finalUrl
+            )
+          );
         };
 
         if (element.tagName) {
@@ -229,8 +270,8 @@ const ResourceLoader = (() => {
           clearTimeout(timeoutId);
           if (element && element.parentNode) {
             element.parentNode.removeChild(element);
-            console.log(`Loading cancelled and element removed: ${finalUrl}`);
-            resourceStates[url] = "unloaded"; // Mark as unloaded due to cancellation
+            log(`Loading cancelled and element removed: ${finalUrl}`, "warn");
+            resourceStates[url] = "unloaded";
           }
         };
       });
@@ -256,8 +297,8 @@ const ResourceLoader = (() => {
 
     if (resourceLoadedPromises[url]) {
       delete resourceLoadedPromises[url];
-      console.log(`Resource ${url} unloaded and cache cleared.`);
-      resourceStates[url] = "unloaded"; // Mark as unloaded
+      log(`Resource ${url} unloaded and cache cleared.`, "verbose");
+      resourceStates[url] = "unloaded";
     }
   }
 
@@ -265,20 +306,20 @@ const ResourceLoader = (() => {
     if (resourceLoadedPromises[url] && resourceLoadedPromises[url].cancel) {
       resourceLoadedPromises[url].cancel();
       delete resourceLoadedPromises[url];
-      console.log(`Resource ${url} loading cancelled.`);
-      resourceStates[url] = "unloaded"; // Mark as unloaded due to cancellation
+      log(`Resource ${url} loading cancelled.`, "warn");
+      resourceStates[url] = "unloaded";
     }
   }
 
-  // New function to expose resource state to users
   function getResourceState(url) {
-    return resourceStates[url] || "unloaded"; // Default to 'unloaded' if no state is tracked
+    return resourceStates[url] || "unloaded";
   }
 
   return {
     include,
     unloadResource,
     cancelResource,
-    getResourceState, // Expose the function to get resource state
+    getResourceState,
+    setLoggingLevel,
   };
 })();
