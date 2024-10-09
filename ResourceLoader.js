@@ -161,40 +161,48 @@ const ResourceLoader = (() => {
       let timedOut = false;
       let startedLoading = false;
 
-      const loadScriptWhenReady = (resolve, reject) => {
-        const existingElement =
-          document.head.querySelector(
-            `[src="${finalUrl}"], [href="${finalUrl}"]`
-          ) ||
-          document.body.querySelector(
-            `[src="${finalUrl}"], [href="${finalUrl}"]`
-          );
-        if (existingElement) {
-          log(`Resource already loaded: ${finalUrl}`, "verbose");
-          resourceStates[url] = "loaded";
-          resolve();
-          return;
-        }
+      return (resourceLoadedPromises[url] = {
+        promise: new Promise((resolve, reject) => {
+          const loadScriptWhenReady = () => {
+            const existingElement =
+              document.head.querySelector(
+                `[src="${finalUrl}"], [href="${finalUrl}"]`
+              ) ||
+              document.body.querySelector(
+                `[src="${finalUrl}"], [href="${finalUrl}"]`
+              );
+            if (existingElement) {
+              log(`Resource already loaded: ${finalUrl}`, "verbose");
+              resourceStates[url] = "loaded";
+              resolve();
+              return;
+            }
 
-        let element;
-        let timeoutId;
+            let element;
+            let timeoutId;
 
-        const handleTimeout = () => {
-          timedOut = true;
-          const error = new Error(`Timeout while loading: ${finalUrl}`);
-          const categorizedError = categorizeError(error, fileType, finalUrl);
-          reject(categorizedError);
-          resourceStates[url] = "unloaded";
-          if (onError) onError(categorizedError);
-          if (element && startedLoading) {
-            element.remove();
-            log(`Resource load aborted due to timeout: ${finalUrl}`, "warn");
-          }
-          if (retryCount < retries) {
-            log(`Retrying to load resource: ${finalUrl}`, "warn");
-            setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
-          }
-        };
+            const handleTimeout = () => {
+              timedOut = true;
+              const error = new Error(`Timeout while loading: ${finalUrl}`);
+              const categorizedError = categorizeError(
+                error,
+                fileType,
+                finalUrl
+              );
+              reject(categorizedError);
+              resourceStates[url] = "unloaded";
+              if (element && startedLoading) {
+                element.remove();
+                log(
+                  `Resource load aborted due to timeout: ${finalUrl}`,
+                  "warn"
+                );
+              }
+              if (retryCount < retries) {
+                log(`Retrying to load resource: ${finalUrl}`, "warn");
+                setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
+              }
+            };
 
         switch (fileType) {
           case "js":
@@ -326,82 +334,80 @@ const ResourceLoader = (() => {
             return;
         }
 
-        applyAttributes(element, attributes, fileType); // Updated to pass fileType
+            applyAttributes(element, attributes, fileType);
+            startedLoading = true;
+            timeoutId = setTimeout(handleTimeout, timeout);
 
-        startedLoading = true;
+            element.onload = () => {
+              if (!timedOut) {
+                clearTimeout(timeoutId);
+                log(`Resource loaded from: ${finalUrl}`, "verbose");
+                resourceStates[url] = "loaded";
+                resolve(); // Make sure resolve is correctly called here
+              }
+            };
 
-        timeoutId = setTimeout(handleTimeout, timeout);
+            element.onerror = () => {
+              clearTimeout(timeoutId);
+              const loadError = new Error(
+                `Failed to load resource from: ${finalUrl}`
+              );
+              const categorizedError = categorizeError(
+                loadError,
+                fileType,
+                finalUrl
+              );
+              reject(categorizedError); // Ensure reject is called on error
+              log(`Failed to load resource from: ${finalUrl}`, "warn");
+              resourceStates[url] = "unloaded";
+              if (retryCount < retries) {
+                log(`Retrying to load resource: ${finalUrl}`, "warn");
+                setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
+              }
+            };
 
-        element.onload = () => {
-          if (!timedOut) {
-            clearTimeout(timeoutId);
-            log(`Resource loaded from: ${finalUrl}`, "verbose");
-            resourceStates[url] = "loaded";
-            resolve(); // Ensure resolve is properly called here
-          }
-        };
+            if (element.tagName) {
+              if (appendToBody && fileType === "js") {
+                document.body.appendChild(element);
+              } else {
+                document.head.appendChild(element);
+              }
+            }
 
-        element.onerror = () => {
-          clearTimeout(timeoutId);
-          const loadError = new Error(
-            `Failed to load resource from: ${finalUrl}`
-          );
-          const categorizedError = categorizeError(
-            loadError,
-            fileType,
-            finalUrl
-          );
-          reject(categorizedError); // Ensure reject is called on error
-          log(`Failed to load resource from: ${finalUrl}`, "warn");
-          resourceStates[url] = "unloaded";
-          if (retryCount < retries) {
-            log(`Retrying to load resource: ${finalUrl}`, "warn");
-            setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
-          }
-        };
+            cancel = () => {
+              clearTimeout(timeoutId);
+              if (element && element.parentNode) {
+                element.parentNode.removeChild(element);
+                log(
+                  `Loading cancelled and element removed: ${finalUrl}`,
+                  "warn"
+                );
+                resourceStates[url] = "unloaded";
+              }
+            };
+          };
 
-        if (element.tagName) {
-          if (appendToBody && fileType === "js") {
-            document.body.appendChild(element);
+          if (
+            fileType === "js" &&
+            deferScriptsUntilReady &&
+            document.readyState !== "complete"
+          ) {
+            window.addEventListener("DOMContentLoaded", () => {
+              log(
+                `Deferring script load until DOM ready: ${finalUrl}`,
+                "verbose"
+              );
+              loadScriptWhenReady();
+            });
           } else {
-            document.head.appendChild(element);
+            loadScriptWhenReady();
           }
-        }
-
-        cancel = () => {
-          clearTimeout(timeoutId);
-          if (element && element.parentNode) {
-            element.parentNode.removeChild(element);
-            log(`Loading cancelled and element removed: ${finalUrl}`, "warn");
-            resourceStates[url] = "unloaded";
-          }
-        };
-      };
-
-      if (
-        fileType === "js" &&
-        deferScriptsUntilReady &&
-        document.readyState !== "complete"
-      ) {
-        window.addEventListener("DOMContentLoaded", () => {
-          log(`Deferring script load until DOM ready: ${finalUrl}`, "verbose");
-          loadScriptWhenReady();
-        });
-      } else {
-        loadScriptWhenReady();
-      }
-
-      resourceLoadedPromises[url] = {
-        promise: new Promise((resolve, reject) => {
-          loadScriptWhenReady(resolve, reject);
         }).catch((err) => {
           log(`Error loading resource: ${url}`, "warn");
           return Promise.resolve();
         }),
         cancel,
-      };
-
-      return resourceLoadedPromises[url].promise;
+      }).promise;
     };
 
     const loadWithConcurrencyLimit = async (
@@ -426,7 +432,7 @@ const ResourceLoader = (() => {
       await processNext();
     };
 
-    await loadWithConcurrencyLimit(sortedUrls, loadResource, maxConcurrency);
+    await loadWithConcurrencyLimit(urls, loadResource, maxConcurrency);
   }
 
   function unloadResource(url) {
