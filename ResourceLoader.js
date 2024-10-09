@@ -1,6 +1,30 @@
 const ResourceLoader = (() => {
   let resourceLoadedPromises = {};
 
+  const validAttributes = {
+    js: ["async", "defer", "integrity", "crossorigin", "type"],
+    css: ["media", "integrity", "crossorigin"],
+    img: ["alt", "crossorigin", "loading", "decoding"],
+    font: ["crossorigin"],
+    general: ["title", "id", "class"],
+  };
+
+  function applyAttributes(element, attributes, type) {
+    const allowedAttributes = [
+      ...validAttributes[type],
+      ...validAttributes.general,
+    ];
+    Object.keys(attributes).forEach((key) => {
+      if (allowedAttributes.includes(key)) {
+        element.setAttribute(key, attributes[key]);
+      } else {
+        console.warn(
+          `Invalid attribute "${key}" for resource type "${type}". Skipping.`
+        );
+      }
+    });
+  }
+
   async function include(urls, options = {}) {
     if (!Array.isArray(urls)) {
       urls = [urls]; // Convert to array if single resource
@@ -15,7 +39,6 @@ const ResourceLoader = (() => {
       crossorigin = false,
     } = options;
 
-    // Helper function to load a single resource
     const loadResource = (url) => {
       if (resourceLoadedPromises[url]) {
         return resourceLoadedPromises[url].promise;
@@ -28,7 +51,6 @@ const ResourceLoader = (() => {
         ? `${url}?_=${new Date().getTime()}`
         : url;
 
-      // Create an AbortController for fetch requests
       const controller = new AbortController();
       const { signal } = controller;
 
@@ -50,7 +72,7 @@ const ResourceLoader = (() => {
         }
 
         const handleTimeout = () => {
-          timedOut = true; // Mark as timed out
+          timedOut = true;
           reject(new Error(`Resource loading timeout: ${finalUrl}`));
           if (element) {
             element.remove();
@@ -65,6 +87,7 @@ const ResourceLoader = (() => {
             if (crossorigin) {
               element.crossOrigin = crossorigin;
             }
+            applyAttributes(element, attributes, "js");
             break;
           case "css":
             element = document.createElement("link");
@@ -73,12 +96,13 @@ const ResourceLoader = (() => {
             if (crossorigin) {
               element.crossOrigin = crossorigin;
             }
+            applyAttributes(element, attributes, "css");
             break;
           case "json":
             fetch(finalUrl, { signal })
               .then((response) => response.json())
               .then((data) => {
-                if (!timedOut) resolve(data); // Only resolve if not timed out
+                if (!timedOut) resolve(data);
               })
               .catch((error) => {
                 if (error.name === "AbortError") {
@@ -99,6 +123,7 @@ const ResourceLoader = (() => {
             if (crossorigin) {
               element.crossOrigin = crossorigin;
             }
+            applyAttributes(element, attributes, "img");
             break;
           case "woff":
           case "woff2":
@@ -121,7 +146,7 @@ const ResourceLoader = (() => {
             fetch(finalUrl, { signal })
               .then((response) => response.blob())
               .then((data) => {
-                if (!timedOut) resolve(data); // Only resolve if not timed out
+                if (!timedOut) resolve(data);
               })
               .catch((error) => {
                 if (error.name === "AbortError") {
@@ -136,10 +161,6 @@ const ResourceLoader = (() => {
             reject(new Error(`Unsupported file type: ${fileType}`));
             return;
         }
-
-        Object.keys(attributes).forEach((key) => {
-          element.setAttribute(key, attributes[key]);
-        });
 
         timeoutId = setTimeout(handleTimeout, timeout);
 
@@ -167,7 +188,6 @@ const ResourceLoader = (() => {
           }
         }
 
-        // Set cancel for non-fetch resources
         cancel = () => {
           clearTimeout(timeoutId);
           if (element && element.parentNode) {
@@ -185,7 +205,6 @@ const ResourceLoader = (() => {
       return resourceLoadedPromises[url].promise;
     };
 
-    // Load each resource in sequence
     return urls.reduce((promiseChain, currentUrl) => {
       return promiseChain.then(() => loadResource(currentUrl));
     }, Promise.resolve());
