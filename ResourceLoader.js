@@ -89,8 +89,9 @@ const ResourceLoader = (() => {
       crossorigin = false,
       logLevel = "warn",
       onError = null,
-      retries = 0, // Number of retries for failed loads
-      retryDelay = 1000, // Delay between retry attempts (in ms)
+      retries = 0,
+      retryDelay = 1000,
+      deferScriptsUntilReady = true, // Defer JS script loading until DOM is ready
     } = options;
 
     setLoggingLevel(logLevel);
@@ -117,10 +118,7 @@ const ResourceLoader = (() => {
       let timedOut = false;
       let startedLoading = false;
 
-      resourceLoadedPromises[url] = new Promise((resolve, reject) => {
-        let element;
-        let timeoutId;
-
+      const loadScriptWhenReady = (resolve, reject) => {
         const existingElement =
           document.head.querySelector(
             `[src="${finalUrl}"], [href="${finalUrl}"]`
@@ -134,6 +132,9 @@ const ResourceLoader = (() => {
           resolve();
           return;
         }
+
+        let element;
+        let timeoutId;
 
         const handleTimeout = () => {
           timedOut = true;
@@ -331,7 +332,21 @@ const ResourceLoader = (() => {
             resourceStates[url] = "unloaded";
           }
         };
-      });
+      };
+
+      if (
+        fileType === "js" &&
+        deferScriptsUntilReady &&
+        document.readyState !== "complete"
+      ) {
+        // Defer loading JS scripts until document is ready
+        window.addEventListener("DOMContentLoaded", () => {
+          log(`Deferring script load until DOM ready: ${finalUrl}`, "verbose");
+          loadScriptWhenReady();
+        });
+      } else {
+        loadScriptWhenReady();
+      }
 
       resourceLoadedPromises[url] = {
         promise: resourceLoadedPromises[url],
