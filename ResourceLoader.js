@@ -25,7 +25,6 @@ const ResourceLoader = (() => {
     }
   }
 
-  // Function to categorize errors for better logging
   function categorizeError(error, fileType, url) {
     if (error.name === "AbortError") {
       return { type: "abort", message: `Fetch aborted for: ${url}` };
@@ -61,9 +60,7 @@ const ResourceLoader = (() => {
     }
   }
 
-  // Validate crossorigin and integrity attributes for security-sensitive resources
   function validateSecurityAttributes(element, fileType, attributes) {
-    // Cross-origin validation
     if (fileType === "js" || fileType === "css") {
       if (
         attributes.crossorigin &&
@@ -77,7 +74,6 @@ const ResourceLoader = (() => {
       }
     }
 
-    // Integrity validation for JS and CSS files
     if (fileType === "js" || fileType === "css") {
       if (!attributes.integrity) {
         log(
@@ -102,11 +98,10 @@ const ResourceLoader = (() => {
       }
     });
 
-    // Apply security-related attributes after general attributes
     validateSecurityAttributes(element, fileType, attributes);
   }
 
-  async function include(urls, options = {}) {
+  function include(urls, options = {}) {
     if (!Array.isArray(urls)) {
       urls = [urls];
     }
@@ -122,17 +117,18 @@ const ResourceLoader = (() => {
       crossorigin = false,
       logLevel = "warn",
       onError = null,
+      onSuccess = null,
       retries = 0,
       retryDelay = 1000,
       deferScriptsUntilReady = true,
       batchSize = 5,
       maxConcurrency = 3,
-      priority = 0, // New option for resource priority
+      priority = 0,
+      removeFailedElements = true,
     } = options;
 
     setLoggingLevel(logLevel);
 
-    // Sort resources by priority (higher priority resources load first)
     const sortedUrls = urls.sort((a, b) => {
       const priorityA = a.priority || 0;
       const priorityB = b.priority || 0;
@@ -200,7 +196,11 @@ const ResourceLoader = (() => {
               }
               if (retryCount < retries) {
                 log(`Retrying to load resource: ${finalUrl}`, "warn");
-                setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
+                setTimeout(() => {
+                  loadResource(url, retryCount + 1)
+                    .then(resolve)
+                    .catch(reject);
+                }, retryDelay);
               }
             };
 
@@ -237,13 +237,14 @@ const ResourceLoader = (() => {
                       finalUrl
                     );
                     reject(categorizedError);
-                    if (onError) onError(categorizedError);
+                    if (onError) onError(categorizedError, url);
                     if (retryCount < retries) {
                       log(`Retrying to load resource: ${finalUrl}`, "warn");
-                      setTimeout(
-                        () => loadResource(url, retryCount + 1),
-                        retryDelay
-                      );
+                      setTimeout(() => {
+                        loadResource(url, retryCount + 1)
+                          .then(resolve)
+                          .catch(reject);
+                      }, retryDelay);
                     }
                   });
                 cancel = () => controller.abort();
@@ -284,13 +285,14 @@ const ResourceLoader = (() => {
                       finalUrl
                     );
                     reject(categorizedError);
-                    if (onError) onError(categorizedError);
+                    if (onError) onError(categorizedError, url);
                     if (retryCount < retries) {
                       log(`Retrying to load resource: ${finalUrl}`, "warn");
-                      setTimeout(
-                        () => loadResource(url, retryCount + 1),
-                        retryDelay
-                      );
+                      setTimeout(() => {
+                        loadResource(url, retryCount + 1)
+                          .then(resolve)
+                          .catch(reject);
+                      }, retryDelay);
                     }
                   });
                 return;
@@ -312,23 +314,26 @@ const ResourceLoader = (() => {
                       finalUrl
                     );
                     reject(categorizedError);
-                    if (onError) onError(categorizedError);
+                    if (onError) onError(categorizedError, url);
                     if (retryCount < retries) {
                       log(`Retrying to load resource: ${finalUrl}`, "warn");
-                      setTimeout(
-                        () => loadResource(url, retryCount + 1),
-                        retryDelay
-                      );
+                      setTimeout(() => {
+                        loadResource(url, retryCount + 1)
+                          .then(resolve)
+                          .catch(reject);
+                      }, retryDelay);
                     }
                   });
                 cancel = () => controller.abort();
                 return;
               default:
-                reject(new Error(`Unsupported file type: ${fileType}`));
+                const error = new Error(`Unsupported file type: ${fileType}`);
+                reject(error);
                 log(
                   `Failed to load unsupported file type: ${finalUrl}`,
                   "error"
                 );
+                return;
             }
 
             applyAttributes(element, attributes, fileType);
@@ -338,38 +343,46 @@ const ResourceLoader = (() => {
             element.onload = () => {
               if (!timedOut) {
                 clearTimeout(timeoutId);
-
-                // Check if resource was really loaded (some resources may trigger onload without being valid)
-                if (
-                  element.naturalWidth === 0 ||
-                  element.readyState === "complete"
-                ) {
-                  log(`Resource loaded from: ${finalUrl}`, "verbose");
-                  resourceStates[url] = "loaded";
-                  resolve();
-                } else {
-                  log(`Failed to load resource from: ${finalUrl}`, "error");
-                  reject(new Error(`Failed to load resource: ${finalUrl}`));
-                }
+                log(`Resource loaded from: ${finalUrl}`, "verbose");
+                resourceStates[url] = "loaded";
+                resolve();
+                if (onSuccess) onSuccess(url);
               }
             };
 
             element.onerror = () => {
               clearTimeout(timeoutId);
+
               const loadError = new Error(
                 `Failed to load resource from: ${finalUrl}`
               );
+
               const categorizedError = categorizeError(
                 loadError,
                 fileType,
                 finalUrl
               );
+
               reject(categorizedError);
+
               log(`Failed to load resource from: ${finalUrl}`, "warn");
+
               resourceStates[url] = "unloaded";
+
+              if (removeFailedElements && element && element.parentNode) {
+                element.parentNode.removeChild(element);
+                log(`Removed failed element: ${finalUrl}`, "verbose");
+              }
+
+              if (onError) onError(categorizedError, url);
+
               if (retryCount < retries) {
                 log(`Retrying to load resource: ${finalUrl}`, "warn");
-                setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
+                setTimeout(() => {
+                  loadResource(url, retryCount + 1)
+                    .then(resolve)
+                    .catch(reject);
+                }, retryDelay);
               }
             };
 
@@ -409,37 +422,51 @@ const ResourceLoader = (() => {
           } else {
             loadScriptWhenReady();
           }
-        }).catch((err) => {
-          log(`Error loading resource: ${url}`, "warn");
-          return Promise.resolve();
         }),
         cancel,
       }).promise;
     };
 
-    const loadWithConcurrencyLimit = async (
-      resources,
-      loadFn,
-      maxConcurrency
-    ) => {
-      let active = 0;
+    function loadWithConcurrencyLimit(resources, loadFn, maxConcurrency) {
       let index = 0;
+      const results = [];
+      const total = resources.length;
 
-      const processNext = async () => {
-        while (active < maxConcurrency && index < resources.length) {
-          const currentUrl = resources[index++];
-          active++;
-          loadFn(currentUrl).finally(() => {
-            active--;
-            processNext();
-          });
+      return new Promise((resolve) => {
+        const startNext = () => {
+          if (index >= total) {
+            if (results.length === total) {
+              resolve(results);
+            }
+            return;
+          }
+
+          const currentIndex = index++;
+          const url = resources[currentIndex];
+
+          loadFn(url)
+            .then(() => {
+              results[currentIndex] = { status: "fulfilled", value: url };
+              startNext();
+            })
+            .catch((error) => {
+              results[currentIndex] = {
+                status: "rejected",
+                reason: error,
+                url,
+              };
+              startNext();
+            });
+        };
+
+        // Start initial batch
+        for (let i = 0; i < Math.min(maxConcurrency, total); i++) {
+          startNext();
         }
-      };
+      });
+    }
 
-      await processNext();
-    };
-
-    await loadWithConcurrencyLimit(urls, loadResource, maxConcurrency);
+    return loadWithConcurrencyLimit(sortedUrls, loadResource, maxConcurrency);
   }
 
   function unloadResource(url) {
