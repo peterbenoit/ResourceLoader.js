@@ -6,22 +6,36 @@ const ResourceLoader = (() => {
       return resourceLoadedPromises[url];
     }
 
-    const { attributes = {}, timeout = 10000, cacheBusting = false } = options;
-    const finalUrl = cacheBusting ? `${url}?_=${new Date().getTime()}` : url;
+    // Options for cache busting, timeout, etc.
+    const {
+      attributes = {},
+      timeout = 10000,
+      cacheBusting = false,
+      restrictCacheBustingToLocal = true,
+    } = options;
+
+    // Determine if cache busting should be applied
+    const isLocalResource = url.startsWith(window.location.origin);
+    const applyCacheBusting =
+      cacheBusting && (!restrictCacheBustingToLocal || isLocalResource);
+    const finalUrl = applyCacheBusting
+      ? `${url}?_=${new Date().getTime()}`
+      : url;
 
     resourceLoadedPromises[url] = new Promise((resolve, reject) => {
       const fileType = url.split(".").pop().toLowerCase();
       let element;
       let timeoutId;
 
+      // Function to handle timeout
       const handleTimeout = () => {
         reject(new Error(`Resource loading timeout: ${finalUrl}`));
         if (element) {
-          element.remove();
+          element.remove(); // Remove the element if timeout occurs
         }
       };
 
-      // Determine how to handle different file types
+      // Handle different resource types
       switch (fileType) {
         case "js":
           element = document.createElement("script");
@@ -38,7 +52,7 @@ const ResourceLoader = (() => {
             .then((response) => response.json())
             .then(resolve)
             .catch(reject);
-          return;
+          return; // JSON does not need to append to the document
         case "jpg":
         case "jpeg":
         case "png":
@@ -49,7 +63,7 @@ const ResourceLoader = (() => {
           break;
         case "woff":
         case "woff2":
-          // Dynamically inject font-face rules
+          // Load font using FontFace API
           const fontFace = new FontFace("customFont", `url(${finalUrl})`);
           fontFace
             .load()
@@ -58,7 +72,7 @@ const ResourceLoader = (() => {
               resolve();
             })
             .catch(reject);
-          return;
+          return; // Font doesn't append a DOM element
         case "pdf":
         case "zip":
         case "bin":
@@ -67,33 +81,35 @@ const ResourceLoader = (() => {
             .then((response) => response.blob())
             .then(resolve)
             .catch(reject);
-          return;
+          return; // Binary files don't append to the DOM
         default:
           reject(new Error(`Unsupported file type: ${fileType}`));
           return;
       }
 
-      // Apply additional attributes (like integrity, media queries, etc.)
+      // Apply additional attributes (like integrity, async, media, etc.)
       Object.keys(attributes).forEach((key) => {
         element.setAttribute(key, attributes[key]);
       });
 
-      // Set up the timeout race
+      // Set up a timeout to reject if the resource takes too long
       timeoutId = setTimeout(handleTimeout, timeout);
 
+      // Handle successful resource loading
       element.onload = () => {
-        clearTimeout(timeoutId); // Cancel the timeout
+        clearTimeout(timeoutId); // Cancel the timeout if loaded successfully
         console.log(`Resource loaded from: ${finalUrl}`);
         resolve();
       };
 
+      // Handle resource load error
       element.onerror = () => {
-        clearTimeout(timeoutId); // Cancel the timeout
+        clearTimeout(timeoutId); // Cancel the timeout if an error occurs
         console.error(`Failed to load resource from: ${finalUrl}`);
         reject(new Error(`Failed to load resource ${finalUrl}`));
       };
 
-      // Append to DOM if it’s a DOM element (e.g., JS, CSS, Image)
+      // Append the resource to the document head if it's a DOM element (e.g., JS, CSS, Image)
       if (element.tagName) {
         document.head.appendChild(element);
       }
@@ -102,6 +118,7 @@ const ResourceLoader = (() => {
     return resourceLoadedPromises[url];
   }
 
+  // Cleanup function to remove loaded resources from the DOM and clear cache
   function unloadResource(url) {
     const elements = document.head.querySelectorAll(
       `[src="${url}"], [href="${url}"]`
