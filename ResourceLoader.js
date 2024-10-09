@@ -337,22 +337,23 @@ const ResourceLoader = (() => {
             clearTimeout(timeoutId);
             log(`Resource loaded from: ${finalUrl}`, "verbose");
             resourceStates[url] = "loaded";
-            resolve();
+            resolve(); // Ensure resolve is properly called here
           }
         };
 
         element.onerror = () => {
           clearTimeout(timeoutId);
-          const loadError = new Error(`Failed to load resource`);
+          const loadError = new Error(
+            `Failed to load resource from: ${finalUrl}`
+          );
           const categorizedError = categorizeError(
             loadError,
             fileType,
             finalUrl
           );
+          reject(categorizedError); // Ensure reject is called on error
           log(`Failed to load resource from: ${finalUrl}`, "warn");
           resourceStates[url] = "unloaded";
-          reject(categorizedError);
-          if (onError) onError(categorizedError);
           if (retryCount < retries) {
             log(`Retrying to load resource: ${finalUrl}`, "warn");
             setTimeout(() => loadResource(url, retryCount + 1), retryDelay);
