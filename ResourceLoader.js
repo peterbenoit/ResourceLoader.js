@@ -57,3 +57,16 @@ async function include(url, options = {}) {
 
   return resourceLoadedPromises[url];
 }
+
+// Cleanup function
+function unloadResource(url) {
+  const elements = document.head.querySelectorAll(
+    `[src="${url}"], [href="${url}"]`
+  );
+  elements.forEach((element) => element.remove());
+
+  if (resourceLoadedPromises[url]) {
+    delete resourceLoadedPromises[url];
+    console.log(`Resource ${url} unloaded and cache cleared.`);
+  }
+}
