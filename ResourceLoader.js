@@ -3,7 +3,7 @@ const ResourceLoader = (() => {
 
   async function include(url, options = {}) {
     if (resourceLoadedPromises[url]) {
-      return resourceLoadedPromises[url];
+      return resourceLoadedPromises[url].promise;
     }
 
     const {
@@ -20,11 +20,12 @@ const ResourceLoader = (() => {
       ? `${url}?_=${new Date().getTime()}`
       : url;
 
-    // Create an AbortController to support cancellation for fetch requests
+    // Create an AbortController for fetch requests
     const controller = new AbortController();
     const { signal } = controller;
 
     let cancel;
+    let timedOut = false;
 
     resourceLoadedPromises[url] = new Promise((resolve, reject) => {
       const fileType = url.split(".").pop().toLowerCase();
@@ -41,6 +42,7 @@ const ResourceLoader = (() => {
       }
 
       const handleTimeout = () => {
+        timedOut = true; // Mark as timed out
         reject(new Error(`Resource loading timeout: ${finalUrl}`));
         if (element) {
           element.remove();
@@ -61,7 +63,9 @@ const ResourceLoader = (() => {
         case "json":
           fetch(finalUrl, { signal })
             .then((response) => response.json())
-            .then(resolve)
+            .then((data) => {
+              if (!timedOut) resolve(data); // Only resolve if not timed out
+            })
             .catch((error) => {
               if (error.name === "AbortError") {
                 console.log(`Fetch aborted for: ${finalUrl}`);
@@ -85,8 +89,10 @@ const ResourceLoader = (() => {
           fontFace
             .load()
             .then(() => {
-              document.fonts.add(fontFace);
-              resolve();
+              if (!timedOut) {
+                document.fonts.add(fontFace);
+                resolve();
+              }
             })
             .catch(reject);
           return;
@@ -95,7 +101,9 @@ const ResourceLoader = (() => {
         case "bin":
           fetch(finalUrl, { signal })
             .then((response) => response.blob())
-            .then(resolve)
+            .then((data) => {
+              if (!timedOut) resolve(data); // Only resolve if not timed out
+            })
             .catch((error) => {
               if (error.name === "AbortError") {
                 console.log(`Fetch aborted for: ${finalUrl}`);
@@ -114,19 +122,22 @@ const ResourceLoader = (() => {
         element.setAttribute(key, attributes[key]);
       });
 
-      // Set up a timeout to reject if the resource takes too long
       timeoutId = setTimeout(handleTimeout, timeout);
 
       element.onload = () => {
-        clearTimeout(timeoutId);
-        console.log(`Resource loaded from: ${finalUrl}`);
-        resolve();
+        if (!timedOut) {
+          clearTimeout(timeoutId);
+          console.log(`Resource loaded from: ${finalUrl}`);
+          resolve();
+        }
       };
 
       element.onerror = () => {
-        clearTimeout(timeoutId);
-        console.error(`Failed to load resource from: ${finalUrl}`);
-        reject(new Error(`Failed to load resource ${finalUrl}`));
+        if (!timedOut) {
+          clearTimeout(timeoutId);
+          console.error(`Failed to load resource from: ${finalUrl}`);
+          reject(new Error(`Failed to load resource ${finalUrl}`));
+        }
       };
 
       if (element.tagName) {
@@ -137,7 +148,7 @@ const ResourceLoader = (() => {
         }
       }
 
-      // Set cancel as removing the element for non-fetch resources
+      // Set cancel for non-fetch resources
       cancel = () => {
         clearTimeout(timeoutId);
         if (element && element.parentNode) {
