@@ -25,6 +25,7 @@ const ResourceLoader = (() => {
     }
   }
 
+  // Function to categorize errors for better logging
   function categorizeError(error, fileType, url) {
     if (error.name === "AbortError") {
       return { type: "abort", message: `Fetch aborted for: ${url}` };
@@ -60,7 +61,36 @@ const ResourceLoader = (() => {
     }
   }
 
-  function applyAttributes(element, attributes) {
+  // Validate crossorigin and integrity attributes for security-sensitive resources
+  function validateSecurityAttributes(element, fileType, attributes) {
+    // Cross-origin validation
+    if (fileType === "js" || fileType === "css") {
+      if (
+        attributes.crossorigin &&
+        !["anonymous", "use-credentials"].includes(attributes.crossorigin)
+      ) {
+        log(
+          `Invalid "crossorigin" attribute for ${fileType} resource: ${attributes.crossorigin}. Using default "anonymous".`,
+          "warn"
+        );
+        element.crossOrigin = "anonymous";
+      }
+    }
+
+    // Integrity validation for JS and CSS files
+    if (fileType === "js" || fileType === "css") {
+      if (!attributes.integrity) {
+        log(
+          `"integrity" attribute missing for ${fileType} resource. This is required for secure resource loading.`,
+          "warn"
+        );
+      } else {
+        element.integrity = attributes.integrity;
+      }
+    }
+  }
+
+  function applyAttributes(element, attributes, fileType) {
     Object.keys(attributes).forEach((key) => {
       if (key in element) {
         element.setAttribute(key, attributes[key]);
@@ -71,6 +101,9 @@ const ResourceLoader = (() => {
         );
       }
     });
+
+    // Apply security-related attributes after general attributes
+    validateSecurityAttributes(element, fileType, attributes);
   }
 
   async function include(urls, options = {}) {
@@ -293,7 +326,7 @@ const ResourceLoader = (() => {
             return;
         }
 
-        applyAttributes(element, attributes);
+        applyAttributes(element, attributes, fileType); // Updated to pass fileType
 
         startedLoading = true;
 
