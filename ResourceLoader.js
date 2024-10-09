@@ -93,6 +93,7 @@ const ResourceLoader = (() => {
       retryDelay = 1000,
       deferScriptsUntilReady = true,
       batchSize = 5,
+      maxConcurrency = 3, // New option to control maximum concurrency
     } = options;
 
     setLoggingLevel(logLevel);
@@ -358,25 +359,31 @@ const ResourceLoader = (() => {
       return resourceLoadedPromises[url].promise;
     };
 
-    // Helper to load resources in batches
-    const loadInBatches = async (resources, loadFn, batchSize) => {
+    // Helper to load resources with max concurrency
+    const loadWithConcurrencyLimit = async (
+      resources,
+      loadFn,
+      maxConcurrency
+    ) => {
+      let active = 0;
       let index = 0;
 
-      const processNextBatch = async () => {
-        const batch = resources.slice(index, index + batchSize);
-        const batchPromises = batch.map(loadFn);
-        await Promise.all(batchPromises);
-        index += batchSize;
-        if (index < resources.length) {
-          await processNextBatch();
+      const processNext = async () => {
+        while (active < maxConcurrency && index < resources.length) {
+          const currentUrl = resources[index++];
+          active++;
+          loadFn(currentUrl).finally(() => {
+            active--;
+            processNext(); // Keep processing until all are done
+          });
         }
       };
 
-      await processNextBatch();
+      await processNext();
     };
 
-    // Process resources in batches
-    await loadInBatches(urls, loadResource, batchSize);
+    // Load resources with concurrency limit
+    await loadWithConcurrencyLimit(urls, loadResource, maxConcurrency);
   }
 
   function unloadResource(url) {
