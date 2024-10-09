@@ -93,14 +93,13 @@ const ResourceLoader = (() => {
       retryDelay = 1000,
       deferScriptsUntilReady = true,
       batchSize = 5,
-      maxConcurrency = 3, // New option to control maximum concurrency
+      maxConcurrency = 3,
     } = options;
 
     setLoggingLevel(logLevel);
 
     const loadResource = (url, retryCount = 0) => {
       if (resourceLoadedPromises[url]) {
-        // If already loading, return the existing promise
         return resourceLoadedPromises[url].promise;
       }
 
@@ -337,20 +336,23 @@ const ResourceLoader = (() => {
         };
       };
 
+      // Cleanup for the `DOMContentLoaded` event listener
+      const handleDOMContentLoaded = () => {
+        log(`Deferring script load until DOM ready: ${finalUrl}`, "verbose");
+        loadScriptWhenReady();
+        window.removeEventListener("DOMContentLoaded", handleDOMContentLoaded);
+      };
+
       if (
         fileType === "js" &&
         deferScriptsUntilReady &&
         document.readyState !== "complete"
       ) {
-        window.addEventListener("DOMContentLoaded", () => {
-          log(`Deferring script load until DOM ready: ${finalUrl}`, "verbose");
-          loadScriptWhenReady();
-        });
+        window.addEventListener("DOMContentLoaded", handleDOMContentLoaded);
       } else {
         loadScriptWhenReady();
       }
 
-      // Store the resource load promise to prevent duplicates
       resourceLoadedPromises[url] = {
         promise: new Promise(loadScriptWhenReady),
         cancel,
@@ -359,7 +361,6 @@ const ResourceLoader = (() => {
       return resourceLoadedPromises[url].promise;
     };
 
-    // Helper to load resources with max concurrency
     const loadWithConcurrencyLimit = async (
       resources,
       loadFn,
@@ -374,7 +375,7 @@ const ResourceLoader = (() => {
           active++;
           loadFn(currentUrl).finally(() => {
             active--;
-            processNext(); // Keep processing until all are done
+            processNext();
           });
         }
       };
@@ -382,7 +383,6 @@ const ResourceLoader = (() => {
       await processNext();
     };
 
-    // Load resources with concurrency limit
     await loadWithConcurrencyLimit(urls, loadResource, maxConcurrency);
   }
 
@@ -414,7 +414,7 @@ const ResourceLoader = (() => {
         resourceLoadedPromises[url].cancel();
       }
     });
-    resourceLoadedPromises = {}; // Clear all promises
+    resourceLoadedPromises = {};
     log("All resource loading operations cancelled.", "warn");
   }
 
@@ -426,7 +426,7 @@ const ResourceLoader = (() => {
     include,
     unloadResource,
     cancelResource,
-    cancelAll, // Expose the new cancelAll function
+    cancelAll,
     getResourceState,
     setLoggingLevel,
   };
