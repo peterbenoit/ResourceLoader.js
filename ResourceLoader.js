@@ -97,25 +97,9 @@ const ResourceLoader = (() => {
 
     setLoggingLevel(logLevel);
 
-    // Helper to load resources in batches
-    const loadInBatches = async (resources, loadFn, batchSize) => {
-      let index = 0;
-
-      const processNextBatch = async () => {
-        const batch = resources.slice(index, index + batchSize);
-        const batchPromises = batch.map(loadFn);
-        await Promise.all(batchPromises);
-        index += batchSize;
-        if (index < resources.length) {
-          await processNextBatch();
-        }
-      };
-
-      await processNextBatch();
-    };
-
     const loadResource = (url, retryCount = 0) => {
       if (resourceLoadedPromises[url]) {
+        // If already loading, return the existing promise
         return resourceLoadedPromises[url].promise;
       }
 
@@ -365,14 +349,33 @@ const ResourceLoader = (() => {
         loadScriptWhenReady();
       }
 
+      // Store the resource load promise to prevent duplicates
       resourceLoadedPromises[url] = {
-        promise: resourceLoadedPromises[url],
+        promise: new Promise(loadScriptWhenReady),
         cancel,
       };
 
       return resourceLoadedPromises[url].promise;
     };
 
+    // Helper to load resources in batches
+    const loadInBatches = async (resources, loadFn, batchSize) => {
+      let index = 0;
+
+      const processNextBatch = async () => {
+        const batch = resources.slice(index, index + batchSize);
+        const batchPromises = batch.map(loadFn);
+        await Promise.all(batchPromises);
+        index += batchSize;
+        if (index < resources.length) {
+          await processNextBatch();
+        }
+      };
+
+      await processNextBatch();
+    };
+
+    // Process resources in batches
     await loadInBatches(urls, loadResource, batchSize);
   }
 
@@ -398,7 +401,6 @@ const ResourceLoader = (() => {
     }
   }
 
-  // New function to cancel all currently loading resources
   function cancelAll() {
     Object.keys(resourceLoadedPromises).forEach((url) => {
       if (resourceLoadedPromises[url] && resourceLoadedPromises[url].cancel) {
