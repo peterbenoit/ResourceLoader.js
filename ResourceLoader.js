@@ -92,7 +92,7 @@ const ResourceLoader = (() => {
       retries = 0,
       retryDelay = 1000,
       deferScriptsUntilReady = true,
-      batchSize = 5, // Limit number of concurrent resource loads
+      batchSize = 5,
     } = options;
 
     setLoggingLevel(logLevel);
@@ -373,7 +373,6 @@ const ResourceLoader = (() => {
       return resourceLoadedPromises[url].promise;
     };
 
-    // Process resources in batches
     await loadInBatches(urls, loadResource, batchSize);
   }
 
@@ -399,6 +398,17 @@ const ResourceLoader = (() => {
     }
   }
 
+  // New function to cancel all currently loading resources
+  function cancelAll() {
+    Object.keys(resourceLoadedPromises).forEach((url) => {
+      if (resourceLoadedPromises[url] && resourceLoadedPromises[url].cancel) {
+        resourceLoadedPromises[url].cancel();
+      }
+    });
+    resourceLoadedPromises = {}; // Clear all promises
+    log("All resource loading operations cancelled.", "warn");
+  }
+
   function getResourceState(url) {
     return resourceStates[url] || "unloaded";
   }
@@ -407,6 +417,7 @@ const ResourceLoader = (() => {
     include,
     unloadResource,
     cancelResource,
+    cancelAll, // Expose the new cancelAll function
     getResourceState,
     setLoggingLevel,
   };
