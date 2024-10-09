@@ -88,6 +88,7 @@ const ResourceLoader = (() => {
       appendToBody = false,
       crossorigin = false,
       logLevel = "warn",
+      onError = null, // New error callback
     } = options;
 
     setLoggingLevel(logLevel);
@@ -135,8 +136,10 @@ const ResourceLoader = (() => {
         const handleTimeout = () => {
           timedOut = true;
           const error = new Error(`Timeout while loading: ${finalUrl}`);
-          reject(categorizeError(error, fileType, finalUrl));
+          const categorizedError = categorizeError(error, fileType, finalUrl);
+          reject(categorizedError);
           resourceStates[url] = "unloaded";
+          if (onError) onError(categorizedError); // Invoke custom error handler
           if (element && startedLoading) {
             element.remove();
             log(`Resource load aborted due to timeout: ${finalUrl}`, "warn");
@@ -170,7 +173,13 @@ const ResourceLoader = (() => {
                 }
               })
               .catch((error) => {
-                reject(categorizeError(error, fileType, finalUrl));
+                const categorizedError = categorizeError(
+                  error,
+                  fileType,
+                  finalUrl
+                );
+                reject(categorizedError);
+                if (onError) onError(categorizedError); // Invoke custom error handler
               });
             cancel = () => controller.abort();
             return;
@@ -200,7 +209,13 @@ const ResourceLoader = (() => {
                 }
               })
               .catch((error) => {
-                reject(categorizeError(error, fileType, finalUrl));
+                const categorizedError = categorizeError(
+                  error,
+                  fileType,
+                  finalUrl
+                );
+                reject(categorizedError);
+                if (onError) onError(categorizedError); // Invoke custom error handler
               });
             return;
           case "pdf":
@@ -215,18 +230,24 @@ const ResourceLoader = (() => {
                 }
               })
               .catch((error) => {
-                reject(categorizeError(error, fileType, finalUrl));
+                const categorizedError = categorizeError(
+                  error,
+                  fileType,
+                  finalUrl
+                );
+                reject(categorizedError);
+                if (onError) onError(categorizedError); // Invoke custom error handler
               });
             cancel = () => controller.abort();
             return;
           default:
-            reject(
-              categorizeError(
-                new Error("Unsupported file type"),
-                fileType,
-                finalUrl
-              )
+            const unsupportedError = categorizeError(
+              new Error("Unsupported file type"),
+              fileType,
+              finalUrl
             );
+            reject(unsupportedError);
+            if (onError) onError(unsupportedError); // Invoke custom error handler
             return;
         }
 
@@ -247,15 +268,16 @@ const ResourceLoader = (() => {
 
         element.onerror = () => {
           clearTimeout(timeoutId);
+          const loadError = new Error(`Failed to load resource`);
+          const categorizedError = categorizeError(
+            loadError,
+            fileType,
+            finalUrl
+          );
           log(`Failed to load resource from: ${finalUrl}`, "warn");
           resourceStates[url] = "unloaded";
-          reject(
-            categorizeError(
-              new Error(`Failed to load resource`),
-              fileType,
-              finalUrl
-            )
-          );
+          reject(categorizedError);
+          if (onError) onError(categorizedError); // Invoke custom error handler
         };
 
         if (element.tagName) {
