@@ -74,6 +74,19 @@ const ResourceLoader = (() => {
         ? `${url}?_=${new Date().getTime()}`
         : url;
 
+      // Search in both head and body to prevent duplicates
+      const existingElement =
+        document.head.querySelector(
+          `[src="${finalUrl}"], [href="${finalUrl}"]`
+        ) ||
+        document.body.querySelector(
+          `[src="${finalUrl}"], [href="${finalUrl}"]`
+        );
+      if (existingElement) {
+        console.log(`Resource already loaded: ${finalUrl}`);
+        return Promise.resolve(); // Avoid re-loading the same resource
+      }
+
       const controller = new AbortController();
       const { signal } = controller;
 
@@ -86,21 +99,11 @@ const ResourceLoader = (() => {
         let element;
         let timeoutId;
 
-        const existingElement = document.querySelector(
-          `[src="${finalUrl}"], [href="${finalUrl}"]`
-        );
-        if (existingElement) {
-          console.log(`Resource already loaded: ${finalUrl}`);
-          resolve();
-          return;
-        }
-
         const handleTimeout = () => {
           timedOut = true;
           const error = new Error(`Timeout while loading: ${finalUrl}`);
           reject(error);
           if (element && startedLoading) {
-            // Prevent resource loading by removing it from the DOM
             element.remove();
             console.log(`Resource load aborted due to timeout: ${finalUrl}`);
           }
@@ -178,10 +181,8 @@ const ResourceLoader = (() => {
             return;
         }
 
-        // Apply valid attributes dynamically
         applyAttributes(element, attributes);
 
-        // Mark the resource as started once it's appended
         startedLoading = true;
 
         timeoutId = setTimeout(handleTimeout, timeout);
