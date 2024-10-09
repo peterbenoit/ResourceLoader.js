@@ -13,6 +13,41 @@ const ResourceLoader = (() => {
     });
   }
 
+  function categorizeError(error, fileType, url) {
+    if (error.name === "AbortError") {
+      return { type: "abort", message: `Fetch aborted for: ${url}` };
+    } else if (error.message.includes("timeout")) {
+      return { type: "timeout", message: `Timeout while loading: ${url}` };
+    } else if (
+      fileType &&
+      ![
+        "js",
+        "css",
+        "json",
+        "jpg",
+        "jpeg",
+        "png",
+        "gif",
+        "svg",
+        "woff",
+        "woff2",
+        "pdf",
+        "zip",
+        "bin",
+      ].includes(fileType)
+    ) {
+      return {
+        type: "unsupported",
+        message: `Unsupported file type: ${fileType} for ${url}`,
+      };
+    } else {
+      return {
+        type: "network",
+        message: `Network error or resource not found: ${url}`,
+      };
+    }
+  }
+
   async function include(urls, options = {}) {
     if (!Array.isArray(urls)) {
       urls = [urls];
@@ -44,6 +79,7 @@ const ResourceLoader = (() => {
 
       let cancel;
       let timedOut = false;
+      let startedLoading = false;
 
       resourceLoadedPromises[url] = new Promise((resolve, reject) => {
         const fileType = url.split(".").pop().toLowerCase();
@@ -63,8 +99,10 @@ const ResourceLoader = (() => {
           timedOut = true;
           const error = new Error(`Timeout while loading: ${finalUrl}`);
           reject(error);
-          if (element) {
+          if (element && startedLoading) {
+            // Prevent resource loading by removing it from the DOM
             element.remove();
+            console.log(`Resource load aborted due to timeout: ${finalUrl}`);
           }
         };
 
@@ -142,6 +180,9 @@ const ResourceLoader = (() => {
 
         // Apply valid attributes dynamically
         applyAttributes(element, attributes);
+
+        // Mark the resource as started once it's appended
+        startedLoading = true;
 
         timeoutId = setTimeout(handleTimeout, timeout);
 
