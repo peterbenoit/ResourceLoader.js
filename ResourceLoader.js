@@ -94,9 +94,17 @@ const ResourceLoader = (() => {
       deferScriptsUntilReady = true,
       batchSize = 5,
       maxConcurrency = 3,
+      priority = 0, // New option for resource priority
     } = options;
 
     setLoggingLevel(logLevel);
+
+    // Sort resources by priority (higher priority resources load first)
+    const sortedUrls = urls.sort((a, b) => {
+      const priorityA = a.priority || 0;
+      const priorityB = b.priority || 0;
+      return priorityB - priorityA;
+    });
 
     const loadResource = (url, retryCount = 0) => {
       if (resourceLoadedPromises[url]) {
@@ -349,14 +357,12 @@ const ResourceLoader = (() => {
         loadScriptWhenReady();
       }
 
-      // Store the resource load promise to prevent duplicates
       resourceLoadedPromises[url] = {
         promise: new Promise((resolve, reject) => {
           loadScriptWhenReady(resolve, reject);
         }).catch((err) => {
-          // Handle the failure gracefully
           log(`Error loading resource: ${url}`, "warn");
-          return Promise.resolve(); // Return a resolved promise to not break the chain
+          return Promise.resolve();
         }),
         cancel,
       };
@@ -386,7 +392,7 @@ const ResourceLoader = (() => {
       await processNext();
     };
 
-    await loadWithConcurrencyLimit(urls, loadResource, maxConcurrency);
+    await loadWithConcurrencyLimit(sortedUrls, loadResource, maxConcurrency);
   }
 
   function unloadResource(url) {
