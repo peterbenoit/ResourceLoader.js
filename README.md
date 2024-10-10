@@ -20,6 +20,10 @@ You can directly download the `ResourceLoader.js` file or include it from your p
 
 You can download the `ResourceLoader.js` file directly from this repository.
 
+### Demo
+
+Some examples of ResourceLoader in action can be found at [CodePen](https://codepen.io/peterbenoit/pen/gOVLWXZ).
+
 ### Usage
 
 Include the `ResourceLoader.js` file in your HTML or project:
