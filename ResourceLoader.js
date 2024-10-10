@@ -145,6 +145,7 @@ const ResourceLoader = (() => {
                 cacheBusting &&
                 (!restrictCacheBustingToLocal || isLocalResource) &&
                 cacheBustingTypes.includes(fileType);
+
             const finalUrl = applyCacheBusting ? `${url}${cacheBustingQuery}` : url;
 
             const controller = new AbortController();
@@ -167,7 +168,7 @@ const ResourceLoader = (() => {
                         if (existingElement) {
                             log(`Resource already loaded: ${finalUrl}`, 'verbose');
                             resourceStates[url] = 'loaded';
-                            resolve();
+                            resolve(finalUrl);
                             return;
                         }
 
@@ -252,6 +253,7 @@ const ResourceLoader = (() => {
                             case 'png':
                             case 'gif':
                             case 'svg':
+                            case 'webp':
                                 element = document.createElement('img');
                                 element.src = finalUrl;
                                 if (crossorigin) {
@@ -293,12 +295,23 @@ const ResourceLoader = (() => {
                             case 'pdf':
                             case 'zip':
                             case 'bin':
+                            case 'mp3':
+                            case 'mp4':
+                            case 'avi':
+                            case 'webm':
+                            case 'ogg':
+                            case 'wav':
                                 fetch(finalUrl, { signal })
-                                    .then((response) => response.blob())
+                                    .then((response) => {
+                                        console.log('Fetch response status:', response.status);
+                                        return response.blob();
+                                    })
                                     .then((data) => {
+                                        console.log('Blob data received:', data);
                                         if (!timedOut) {
                                             resourceStates[url] = 'loaded';
                                             resolve(data);
+                                            if (onSuccess) onSuccess(data); // Invoke onSuccess callback
                                         }
                                     })
                                     .catch((error) => {
