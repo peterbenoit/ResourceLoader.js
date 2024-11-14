@@ -1,0 +1,36 @@
+name: Update Portfolio Site
+
+on:
+  push:
+    branches:
+      - main  # Trigger on updates to the main branch; adjust if needed
+  release:
+    types: [published]  # Trigger on release publication
+
+jobs:
+  update-portfolio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Clone Portfolio Repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_FOR_PORTFOLIO_REPO }}
+        run: |
+          git clone https://github.com/peterbenoit/peterbenoit.github.io portfolio
+          cd portfolio
+          git config user.name "GitHub Action"
+          git config user.email "github-action@github.com"
+
+      - name: Copy Updated Library
+        run: cp -r ./dist/* ./portfolio/libraries/ResourceLoader
+
+      - name: Commit and Push Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_FOR_PORTFOLIO_REPO }}
+        run: |
+          cd portfolio
+          git add .
+          git commit -m "Update ResourceLoader in portfolio"
+          git push
