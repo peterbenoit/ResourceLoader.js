@@ -44,7 +44,7 @@ const ResourceLoader = (() => {
     if (validLevels.includes(level)) {
       loggingLevel = level;
     } else {
-      console.warn(`Invalid log level: ${level}. Falling back to 'warn'.`);
+      console.warn(`Invalid logging level: ${level}. Falling back to 'warn'.`);
       loggingLevel = "warn";
     }
   }
