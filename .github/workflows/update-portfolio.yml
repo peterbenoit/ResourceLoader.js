@@ -22,7 +22,7 @@ jobs:
           git config user.email "peterbenoit@gmail.com"
 
       - name: Copy Updated Library
-        run: cp ./resourceLoader.js ./portfolio/libraries/resourceLoader.js
+        run: cp ./resourceLoader.js ./portfolio/js/resourceLoader.js
 
       - name: Commit and Push Changes
         run: |
