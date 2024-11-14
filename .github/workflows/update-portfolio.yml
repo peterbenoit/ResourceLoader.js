@@ -24,7 +24,7 @@ jobs:
           git config user.email "github-action@github.com"
 
       - name: Copy Updated Library
-        run: cp -r ./dist/* ./portfolio/libraries/ResourceLoader
+        run: cp ./resourceLoader.js ./portfolio/libraries/resourceLoader.js
 
       - name: Commit and Push Changes
         env:
