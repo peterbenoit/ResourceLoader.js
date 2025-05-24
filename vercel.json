@@ -1,0 +1,15 @@
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "docs/package.json",
+            "use": "@vercel/static-build",
+            "config": { "distDir": "docs/dist" }
+        }
+    ],
+    "routes": [
+        { "handle": "filesystem" },
+        { "src": "/docs/(.*)", "dest": "/docs/$1" },
+        { "src": "/(.*)", "dest": "/docs/$1" }
+    ]
+}
