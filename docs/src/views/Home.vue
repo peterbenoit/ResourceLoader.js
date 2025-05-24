@@ -17,9 +17,19 @@
 								on GitHub</a>
 						</div>
 					</div>
-					<div class="hidden md:block">
-						<div class="bg-white/10 backdrop-blur-sm rounded-lg p-6 shadow-xl">
-							<pre class="text-sm overflow-x-auto"><code>// Load multiple resources
+					<div class="hidden md:flex items-center justify-center">
+						<img src="/resource-loader-logo.svg" alt="ResourceLoader.js Logo"
+							class="w-full max-w-md rounded-lg shadow-xl">
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- Code Example Section -->
+		<section class="py-6 bg-gray-800 text-white">
+			<div class="container mx-auto px-4">
+				<div class="bg-gray-900 rounded-lg p-6 shadow-xl max-w-3xl mx-auto">
+					<pre class="text-sm overflow-x-auto"><code>// Load multiple resources
 ResourceLoader.include([
   'script.js',
   'styles.css',
@@ -30,8 +40,6 @@ ResourceLoader.include([
 }).then(() => {
   console.log('All resources loaded!');
 });</code></pre>
-						</div>
-					</div>
 				</div>
 			</div>
 		</section>

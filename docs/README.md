@@ -35,7 +35,32 @@ This will create a `dist` folder with the built site.
 
 ## Deployment
 
-This site is configured for deployment on Vercel. Simply push to your GitHub repository and connect it with Vercel.
+This site is configured for deployment on Vercel. You can deploy it in one of several ways:
+
+### Using the Deploy Script
+
+```bash
+# Make the script executable (first time only)
+chmod +x ./deploy.sh
+
+# Run the deploy script
+./deploy.sh
+```
+
+### Manual Deployment
+
+```bash
+# Build the site
+npm run build
+
+# Deploy using Vercel CLI
+cd ..
+vercel --prod
+```
+
+### GitHub Integration
+
+Simply push to your GitHub repository and connect it with Vercel in the Vercel dashboard.
 
 ## Structure
 

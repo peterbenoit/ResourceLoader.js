@@ -20,6 +20,16 @@ You can directly download the `ResourceLoader.js` file or include it from your p
 
 You can download the `ResourceLoader.js` file directly from this repository.
 
+### Usage
+
+After including ResourceLoader.js in your HTML:
+
+```html
+<script src="path/to/ResourceLoader.js"></script>
+```
+
+ResourceLoader will be available as a global object `window.ResourceLoader` or simply `ResourceLoader` in your code.
+
 ### Demo
 
 Some examples of ResourceLoader in action can be found at [CodePen](https://codepen.io/peterbenoit/pen/gOVLWXZ).

@@ -8,6 +8,7 @@ import Home from './views/Home.vue'
 import Features from './views/Features.vue'
 import Examples from './views/Examples.vue'
 import Api from './views/Api.vue'
+import NotFound from './views/NotFound.vue'
 
 // Create the router
 const router = createRouter({
@@ -32,6 +33,11 @@ const router = createRouter({
 			path: '/api',
 			name: 'api',
 			component: Api
+		},
+		{
+			path: '/:pathMatch(.*)*',
+			name: 'not-found',
+			component: NotFound
 		}
 	],
 	scrollBehavior(to, from, savedPosition) {

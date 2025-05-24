@@ -1,0 +1,15 @@
+{
+    "name": "ResourceLoader.js",
+    "version": "1.0.0",
+    "description": "A flexible JavaScript library for dynamic resource loading",
+    "author": "Peter Benoit",
+    "features": [
+        "Dynamic Resource Loading",
+        "Concurrency Control",
+        "Error Handling",
+        "Cache Busting",
+        "Security Features",
+        "Blob and File Loading"
+    ],
+    "license": "MIT"
+}

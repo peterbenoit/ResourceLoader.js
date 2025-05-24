@@ -1,0 +1,23 @@
+/* Sample CSS file for testing ResourceLoader */
+.resource-loader-test {
+	border: 2px solid #3490dc;
+	padding: 15px;
+	margin: 10px 0;
+	border-radius: 5px;
+	background-color: rgba(52, 144, 220, 0.1);
+	transition: all 0.3s ease;
+}
+
+.resource-loader-test:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.resource-loader-test h4 {
+	color: #3490dc;
+	margin: 0 0 10px 0;
+}
+
+.resource-loader-test p {
+	margin: 0;
+}
