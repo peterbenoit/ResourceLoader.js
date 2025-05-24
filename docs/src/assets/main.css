@@ -41,5 +41,5 @@ h3 {
 }
 
 code {
-	@apply p-1 rounded bg-gray-100 font-mono text-sm;
+	@apply p-1 rounded font-mono text-sm;
 }
