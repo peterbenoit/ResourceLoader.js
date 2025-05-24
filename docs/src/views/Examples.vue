@@ -701,13 +701,22 @@ export default {
 				audioContainer.innerHTML = '<div class="text-center text-gray-500">Loading audio...</div>';
 
 				window.ResourceLoader.include(['https://assets.codepen.io/252820/peter.mp3'], {
-					onSuccess: (url) => {
-						// For non-binary loading, we get the URL directly
+					onSuccess: (response) => {
 						audioContainer.innerHTML = ''; // Clear previous results
+
+						// Handle both URL string and Blob responses
+						let audioUrl;
+						if (response instanceof Blob) {
+							// Create object URL from Blob
+							audioUrl = URL.createObjectURL(response);
+						} else {
+							// It's already a URL string
+							audioUrl = response;
+						}
 
 						const audioElement = document.createElement('audio');
 						audioElement.controls = true;
-						audioElement.src = url;
+						audioElement.src = audioUrl;
 						audioElement.className = 'w-full';
 
 						const sourceInfo = document.createElement('div');
