@@ -238,7 +238,7 @@ ResourceLoader.include(['https://picsum.photos/400/300'], {
 
 						<div class="bg-gray-50 p-4 mb-6 rounded-md">
 							<pre class="text-sm overflow-x-auto"><code>// Load an audio file from a Creative Commons source
-ResourceLoader.include(['https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'], {
+ResourceLoader.include(['https://assets.codepen.io/252820/peter.mp3'], {
   onSuccess: (url) => {
     // For non-binary loading, we get the URL directly
     const audioContainer = document.getElementById('audio-container');
@@ -251,7 +251,7 @@ ResourceLoader.include(['https://www.soundhelix.com/examples/mp3/SoundHelix-Song
 
     const sourceInfo = document.createElement('div');
     sourceInfo.className = 'mt-2 text-sm text-gray-500';
-    sourceInfo.textContent = 'Audio from SoundHelix.com (CC-BY)';
+    sourceInfo.textContent = 'Peter and the Wolf - Creative Commons';
 
     audioContainer.appendChild(audioElement);
     audioContainer.appendChild(sourceInfo);
@@ -700,7 +700,7 @@ export default {
 				const audioContainer = document.getElementById('audio-container');
 				audioContainer.innerHTML = '<div class="text-center text-gray-500">Loading audio...</div>';
 
-				window.ResourceLoader.include(['https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'], {
+				window.ResourceLoader.include(['https://assets.codepen.io/252820/peter.mp3'], {
 					onSuccess: (url) => {
 						// For non-binary loading, we get the URL directly
 						audioContainer.innerHTML = ''; // Clear previous results
@@ -712,7 +712,7 @@ export default {
 
 						const sourceInfo = document.createElement('div');
 						sourceInfo.className = 'mt-2 text-sm text-gray-500';
-						sourceInfo.textContent = 'Audio from SoundHelix.com (CC-BY)';
+						sourceInfo.textContent = 'Peter and the Wolf - Creative Commons';
 
 						audioContainer.appendChild(audioElement);
 						audioContainer.appendChild(sourceInfo);
@@ -837,10 +837,14 @@ export default {
 				document.getElementById('cache-results').innerHTML = '';
 				document.getElementById('cache-timestamp').textContent = 'Loading...';
 
+				// Generate timestamp once so we can display it correctly
+				const timestamp = new Date().getTime();
+				const cacheBustingQuery = `?_cb=${timestamp}`;
+
 				// Enable cache busting for all supported file types
 				window.ResourceLoader.include(['/sample-script.js', '/sample-style.css', '/sample-data.json'], {
 					cacheBusting: true,
-					cacheBustingQuery: `?_cb=${new Date().getTime()}`,
+					cacheBustingQuery: cacheBustingQuery,
 					cacheBustingTypes: ['js', 'css', 'json'],
 					// Only apply cache busting to files from your own domain
 					restrictCacheBustingToLocal: true,
@@ -848,11 +852,8 @@ export default {
 						document.getElementById('cache-results').innerHTML +=
 							`<div class="text-green-500">✓ Loaded: ${url}</div>`;
 
-						// Extract the cache busting parameter to show it worked
-						if (url.includes('?_cb=')) {
-							const timestamp = url.split('?_cb=')[1];
-							document.getElementById('cache-timestamp').textContent = timestamp;
-						}
+						// Update the timestamp display - we already know the value
+						document.getElementById('cache-timestamp').textContent = timestamp;
 					}
 				});
 			}
