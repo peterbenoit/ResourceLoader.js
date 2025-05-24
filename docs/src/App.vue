@@ -63,8 +63,6 @@
 						<ul class="space-y-1">
 							<li><a href="https://github.com/peterbenoit/ResourceLoader.js" class="hover:text-primary"
 									target="_blank">GitHub Repository</a></li>
-							<li><a href="https://codepen.io/peterbenoit/pen/gOVLWXZ" class="hover:text-primary"
-									target="_blank">CodePen Demo</a></li>
 						</ul>
 					</div>
 				</div>
