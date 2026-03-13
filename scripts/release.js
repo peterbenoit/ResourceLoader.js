@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const readline = require("node:readline/promises");
 
 function run(command, args, options = {}) {
 	const result = spawnSync(command, args, {
@@ -153,7 +154,7 @@ function runChecks(options, pkg) {
 	}
 }
 
-function confirmOrExit(options, pkg, nextVersionHint) {
+async function confirmOrExit(options, pkg, nextVersionHint) {
 	if (options.yes) {
 		return;
 	}
@@ -170,9 +171,16 @@ function confirmOrExit(options, pkg, nextVersionHint) {
 		summary.push(`- next version (from npm): ${nextVersionHint}`);
 	}
 	summary.push("Continue? [y/N]");
-	process.stdout.write(summary.join("\n") + " ");
 
-	const input = fs.readFileSync(0, "utf8").trim().toLowerCase();
+	const rl = readline.createInterface({
+		input: process.stdin,
+		output: process.stdout,
+	});
+	const input = (await rl.question(summary.join("\n") + " "))
+		.trim()
+		.toLowerCase();
+	rl.close();
+
 	if (input !== "y" && input !== "yes") {
 		throw new Error("Release cancelled by user.");
 	}
@@ -253,7 +261,7 @@ function printCdnUrls(pkg, version) {
 	console.log(`- unpkg latest: ${latestUnpkg}`);
 }
 
-function main() {
+async function main() {
 	const options = parseArgs(process.argv.slice(2));
 	if (options.help) {
 		printHelp();
@@ -265,7 +273,7 @@ function main() {
 	ensureGitClean();
 	ensureNpmAuth(options.skipLogin);
 	runChecks(options, pkg);
-	confirmOrExit(options, pkg, null);
+	await confirmOrExit(options, pkg, null);
 
 	const newVersion = bumpVersion(options.bump);
 	pushChanges(options.skipPush);
@@ -279,9 +287,7 @@ function main() {
 	console.log("\nRelease flow completed.");
 }
 
-try {
-	main();
-} catch (error) {
+main().catch((error) => {
 	console.error(`\nRelease failed: ${error.message}`);
 	process.exit(1);
-}
+});
