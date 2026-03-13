@@ -2,3 +2,4 @@ node_modules
 docs/package-lock.json
 *.log
 CDN.*
+a*.md

@@ -35,7 +35,9 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"pack:dry-run": "npm pack --dry-run",
-		"prepublishOnly": "npm test && npm run pack:dry-run"
+		"prepublishOnly": "npm test && npm run pack:dry-run",
+		"release": "node scripts/release.js",
+		"release:patch": "node scripts/release.js --bump patch"
 	},
 	"devDependencies": {
 		"jsdom": "^24.1.3",

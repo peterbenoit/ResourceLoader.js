@@ -33,7 +33,15 @@
  * @version 1.0.0
  * @license MIT
  */
-window.ResourceLoader = (() => {
+(function (root, factory) {
+	const instance = factory(root);
+	if (typeof module === "object" && module.exports) {
+		module.exports = instance;
+	}
+	if (root && typeof root === "object") {
+		root.ResourceLoader = instance;
+	}
+})(typeof globalThis !== "undefined" ? globalThis : this, (root) => {
 	let resourceLoadedPromises = {};
 	let resourceStates = {};
 
@@ -63,7 +71,10 @@ window.ResourceLoader = (() => {
 	function categorizeError(error, fileType, url) {
 		if (error.name === "AbortError") {
 			return { type: "abort", message: `Fetch aborted for: ${url}` };
-		} else if (error.message.includes("timeout")) {
+		} else if (
+			typeof error.message === "string" &&
+			error.message.toLowerCase().includes("timeout")
+		) {
 			return { type: "timeout", message: `Timeout while loading: ${url}` };
 		} else if (
 			fileType &&
@@ -215,7 +226,9 @@ window.ResourceLoader = (() => {
 
 			resourceStates[url] = "loading";
 
-			const isLocalResource = url.startsWith(window.location.origin);
+			const isLocalResource =
+				!!(root.location && root.location.origin) &&
+				url.startsWith(root.location.origin);
 
 			const fileType = getFileType(url);
 
@@ -277,8 +290,23 @@ window.ResourceLoader = (() => {
 					let element;
 					let timeoutId;
 
+					const clearLoadTimeout = () => {
+						if (timeoutId) {
+							clearTimeout(timeoutId);
+							timeoutId = null;
+						}
+					};
+
+					const startLoadTimeout = () => {
+						timeoutId = setTimeout(handleTimeout, timeout);
+					};
+
 					const handleTimeout = () => {
+						if (timedOut) {
+							return;
+						}
 						timedOut = true;
+						controller.abort();
 						const error = new Error(`Timeout while loading: ${finalUrl}`);
 						const categorizedError = categorizeError(
 							error,
@@ -313,6 +341,7 @@ window.ResourceLoader = (() => {
 							}
 							break;
 						case "json":
+							startLoadTimeout();
 							fetch(finalUrl, { signal })
 								.then((response) => {
 									if (!response.ok) {
@@ -322,12 +351,17 @@ window.ResourceLoader = (() => {
 								})
 								.then((data) => {
 									if (!timedOut) {
+										clearLoadTimeout();
 										resourceStates[url] = "loaded";
 										resolve(data); // Resolve with the JSON data
 										if (onSuccess) onSuccess(data); // Trigger onSuccess
 									}
 								})
 								.catch((error) => {
+									if (timedOut) {
+										return;
+									}
+									clearLoadTimeout();
 									const categorizedError = categorizeError(
 										error,
 										fileType,
@@ -335,7 +369,10 @@ window.ResourceLoader = (() => {
 									);
 									handleFailure(categorizedError, resolve, reject);
 								});
-							promiseEntry.cancel = () => controller.abort();
+							promiseEntry.cancel = () => {
+								clearLoadTimeout();
+								controller.abort();
+							};
 							return;
 						case "jpg":
 						case "jpeg":
@@ -351,6 +388,7 @@ window.ResourceLoader = (() => {
 							break;
 						case "woff":
 						case "woff2":
+							startLoadTimeout();
 							const fontFace = new FontFace(
 								"customFont",
 								`url(${finalUrl})`,
@@ -362,12 +400,17 @@ window.ResourceLoader = (() => {
 								.load()
 								.then(() => {
 									if (!timedOut) {
+										clearLoadTimeout();
 										document.fonts.add(fontFace);
 										resourceStates[url] = "loaded";
 										resolve();
 									}
 								})
 								.catch((error) => {
+									if (timedOut) {
+										return;
+									}
+									clearLoadTimeout();
 									const categorizedError = categorizeError(
 										error,
 										fileType,
@@ -385,20 +428,27 @@ window.ResourceLoader = (() => {
 						case "webm":
 						case "ogg":
 						case "wav":
+							startLoadTimeout();
 							fetch(finalUrl, { signal })
 								.then((response) => {
-									console.log("Fetch response status:", response.status);
+									if (!response.ok) {
+										throw new Error(`HTTP error! status: ${response.status}`);
+									}
 									return response.blob();
 								})
 								.then((data) => {
-									console.log("Blob data received:", data);
 									if (!timedOut) {
+										clearLoadTimeout();
 										resourceStates[url] = "loaded";
 										resolve(data);
 										if (onSuccess) onSuccess(data); // Invoke onSuccess callback
 									}
 								})
 								.catch((error) => {
+									if (timedOut) {
+										return;
+									}
+									clearLoadTimeout();
 									const categorizedError = categorizeError(
 										error,
 										fileType,
@@ -406,7 +456,10 @@ window.ResourceLoader = (() => {
 									);
 									handleFailure(categorizedError, resolve, reject);
 								});
-							promiseEntry.cancel = () => controller.abort();
+							promiseEntry.cancel = () => {
+								clearLoadTimeout();
+								controller.abort();
+							};
 							return;
 						default:
 							const error = new Error(`Unsupported file type: ${fileType}`);
@@ -420,11 +473,11 @@ window.ResourceLoader = (() => {
 
 					applyAttributes(element, attributes, fileType);
 					startedLoading = true;
-					timeoutId = setTimeout(handleTimeout, timeout);
+					startLoadTimeout();
 
 					element.onload = () => {
 						if (!timedOut) {
-							clearTimeout(timeoutId);
+							clearLoadTimeout();
 							log(`Resource loaded from: ${finalUrl}`, "verbose");
 							resourceStates[url] = "loaded";
 							resolve();
@@ -433,7 +486,10 @@ window.ResourceLoader = (() => {
 					};
 
 					element.onerror = () => {
-						clearTimeout(timeoutId);
+						if (timedOut) {
+							return;
+						}
+						clearLoadTimeout();
 
 						const loadError = new Error(
 							`Failed to load resource from: ${finalUrl}`
@@ -464,7 +520,8 @@ window.ResourceLoader = (() => {
 					}
 
 					promiseEntry.cancel = () => {
-						clearTimeout(timeoutId);
+						clearLoadTimeout();
+						controller.abort();
 						if (element && element.parentNode) {
 							element.parentNode.removeChild(element);
 							log(
@@ -487,7 +544,7 @@ window.ResourceLoader = (() => {
 					deferScriptsUntilReady &&
 					document.readyState !== "complete"
 				) {
-					window.addEventListener("DOMContentLoaded", () => {
+					root.addEventListener("DOMContentLoaded", () => {
 						log(
 							`Deferring script load until DOM ready: ${finalUrl}`,
 							"verbose"
@@ -600,4 +657,4 @@ window.ResourceLoader = (() => {
 		getResourceState,
 		setLoggingLevel,
 	};
-})();
+});

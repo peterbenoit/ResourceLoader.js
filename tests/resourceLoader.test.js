@@ -107,6 +107,41 @@ describe("ResourceLoader", () => {
 		expect(ResourceLoader.getResourceState(url)).toBe("unloaded");
 	});
 
+	it("times out a stalled JSON request", async () => {
+		const ResourceLoader = loadLibrary();
+		const url = "https://example.com/stalled.json";
+
+		vi.useFakeTimers();
+		try {
+			global.fetch = vi.fn((_, { signal }) => {
+				return new Promise((resolve, reject) => {
+					signal.addEventListener("abort", () => {
+						const abortError = new Error("aborted");
+						abortError.name = "AbortError";
+						reject(abortError);
+					});
+				});
+			});
+
+			const promise = ResourceLoader.include([url], { timeout: 10 });
+			const rejection = expect(promise).rejects.toMatchObject({
+				type: "aggregate",
+				results: [
+					{
+						status: "rejected",
+						reason: { type: "timeout" },
+						url,
+					},
+				],
+			});
+			await vi.advanceTimersByTimeAsync(20);
+			await rejection;
+			expect(ResourceLoader.getResourceState(url)).toBe("unloaded");
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("infers JSON type for extensionless API URLs", async () => {
 		const ResourceLoader = loadLibrary();
 

@@ -226,7 +226,29 @@ npm test
 
 ## Release Steps
 
-Run the release flow from the repository root:
+Run the automated release helper from the repository root:
+
+```bash
+npm run release -- --bump patch
+```
+
+Publish in the same flow:
+
+```bash
+npm run release -- --bump patch --publish
+```
+
+What the release helper does:
+
+- Ensures the git tree is clean.
+- Verifies npm auth (`npm whoami`) and starts `npm login` if needed.
+- Runs `npm test` and `npm run pack:dry-run`.
+- Runs `npm version <bump>` (creates commit + tag).
+- Pushes with tags (`git push origin HEAD --follow-tags`).
+- Optionally runs `npm publish`.
+- Prints npm/CDN verification info.
+
+Manual flow (equivalent):
 
 ```bash
 npm install

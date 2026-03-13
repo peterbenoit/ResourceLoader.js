@@ -71,7 +71,10 @@
 	function categorizeError(error, fileType, url) {
 		if (error.name === "AbortError") {
 			return { type: "abort", message: `Fetch aborted for: ${url}` };
-		} else if (error.message.includes("timeout")) {
+		} else if (
+			typeof error.message === "string" &&
+			error.message.toLowerCase().includes("timeout")
+		) {
 			return { type: "timeout", message: `Timeout while loading: ${url}` };
 		} else if (
 			fileType &&
@@ -287,8 +290,23 @@
 					let element;
 					let timeoutId;
 
+					const clearLoadTimeout = () => {
+						if (timeoutId) {
+							clearTimeout(timeoutId);
+							timeoutId = null;
+						}
+					};
+
+					const startLoadTimeout = () => {
+						timeoutId = setTimeout(handleTimeout, timeout);
+					};
+
 					const handleTimeout = () => {
+						if (timedOut) {
+							return;
+						}
 						timedOut = true;
+						controller.abort();
 						const error = new Error(`Timeout while loading: ${finalUrl}`);
 						const categorizedError = categorizeError(
 							error,
@@ -323,6 +341,7 @@
 							}
 							break;
 						case "json":
+							startLoadTimeout();
 							fetch(finalUrl, { signal })
 								.then((response) => {
 									if (!response.ok) {
@@ -332,12 +351,17 @@
 								})
 								.then((data) => {
 									if (!timedOut) {
+										clearLoadTimeout();
 										resourceStates[url] = "loaded";
 										resolve(data); // Resolve with the JSON data
 										if (onSuccess) onSuccess(data); // Trigger onSuccess
 									}
 								})
 								.catch((error) => {
+									if (timedOut) {
+										return;
+									}
+									clearLoadTimeout();
 									const categorizedError = categorizeError(
 										error,
 										fileType,
@@ -345,7 +369,10 @@
 									);
 									handleFailure(categorizedError, resolve, reject);
 								});
-							promiseEntry.cancel = () => controller.abort();
+							promiseEntry.cancel = () => {
+								clearLoadTimeout();
+								controller.abort();
+							};
 							return;
 						case "jpg":
 						case "jpeg":
@@ -361,6 +388,7 @@
 							break;
 						case "woff":
 						case "woff2":
+							startLoadTimeout();
 							const fontFace = new FontFace(
 								"customFont",
 								`url(${finalUrl})`,
@@ -372,12 +400,17 @@
 								.load()
 								.then(() => {
 									if (!timedOut) {
+										clearLoadTimeout();
 										document.fonts.add(fontFace);
 										resourceStates[url] = "loaded";
 										resolve();
 									}
 								})
 								.catch((error) => {
+									if (timedOut) {
+										return;
+									}
+									clearLoadTimeout();
 									const categorizedError = categorizeError(
 										error,
 										fileType,
@@ -395,20 +428,27 @@
 						case "webm":
 						case "ogg":
 						case "wav":
+							startLoadTimeout();
 							fetch(finalUrl, { signal })
 								.then((response) => {
-									console.log("Fetch response status:", response.status);
+									if (!response.ok) {
+										throw new Error(`HTTP error! status: ${response.status}`);
+									}
 									return response.blob();
 								})
 								.then((data) => {
-									console.log("Blob data received:", data);
 									if (!timedOut) {
+										clearLoadTimeout();
 										resourceStates[url] = "loaded";
 										resolve(data);
 										if (onSuccess) onSuccess(data); // Invoke onSuccess callback
 									}
 								})
 								.catch((error) => {
+									if (timedOut) {
+										return;
+									}
+									clearLoadTimeout();
 									const categorizedError = categorizeError(
 										error,
 										fileType,
@@ -416,7 +456,10 @@
 									);
 									handleFailure(categorizedError, resolve, reject);
 								});
-							promiseEntry.cancel = () => controller.abort();
+							promiseEntry.cancel = () => {
+								clearLoadTimeout();
+								controller.abort();
+							};
 							return;
 						default:
 							const error = new Error(`Unsupported file type: ${fileType}`);
@@ -430,11 +473,11 @@
 
 					applyAttributes(element, attributes, fileType);
 					startedLoading = true;
-					timeoutId = setTimeout(handleTimeout, timeout);
+					startLoadTimeout();
 
 					element.onload = () => {
 						if (!timedOut) {
-							clearTimeout(timeoutId);
+							clearLoadTimeout();
 							log(`Resource loaded from: ${finalUrl}`, "verbose");
 							resourceStates[url] = "loaded";
 							resolve();
@@ -443,7 +486,10 @@
 					};
 
 					element.onerror = () => {
-						clearTimeout(timeoutId);
+						if (timedOut) {
+							return;
+						}
+						clearLoadTimeout();
 
 						const loadError = new Error(
 							`Failed to load resource from: ${finalUrl}`
@@ -474,7 +520,8 @@
 					}
 
 					promiseEntry.cancel = () => {
-						clearTimeout(timeoutId);
+						clearLoadTimeout();
+						controller.abort();
 						if (element && element.parentNode) {
 							element.parentNode.removeChild(element);
 							log(
