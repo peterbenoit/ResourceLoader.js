@@ -16,6 +16,28 @@ ResourceLoader is a flexible JavaScript library that allows for dynamic loading 
 
 You can directly download the `ResourceLoader.js` file or include it from your project.
 
+### CDN Usage
+
+Use jsDelivr (recommended) or unpkg directly from the npm package.
+
+Pinned version:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/resourceloader-js@1.0.1/resourceLoader.js"></script>
+```
+
+Latest published version:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/resourceloader-js/resourceLoader.js"></script>
+```
+
+unpkg pinned version:
+
+```html
+<script src="https://unpkg.com/resourceloader-js@1.0.1/resourceLoader.js"></script>
+```
+
 ### Direct Download
 
 You can download the `ResourceLoader.js` file directly from this repository.
@@ -201,3 +223,17 @@ Run tests from the repository root:
 npm install
 npm test
 ```
+
+## Release Steps
+
+Run the release flow from the repository root:
+
+```bash
+npm install
+npm version patch
+npm test
+npm run pack:dry-run
+npm publish
+```
+
+If you need to publish a specific version bump, replace `patch` with `minor` or `major`.

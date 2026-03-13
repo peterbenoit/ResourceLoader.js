@@ -34,7 +34,8 @@
 	"scripts": {
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"prepublishOnly": "npm test"
+		"pack:dry-run": "npm pack --dry-run",
+		"prepublishOnly": "npm test && npm run pack:dry-run"
 	},
 	"devDependencies": {
 		"jsdom": "^24.1.3",

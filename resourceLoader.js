@@ -33,7 +33,15 @@
  * @version 1.0.0
  * @license MIT
  */
-window.ResourceLoader = (() => {
+(function (root, factory) {
+	const instance = factory(root);
+	if (typeof module === "object" && module.exports) {
+		module.exports = instance;
+	}
+	if (root && typeof root === "object") {
+		root.ResourceLoader = instance;
+	}
+})(typeof globalThis !== "undefined" ? globalThis : this, (root) => {
 	let resourceLoadedPromises = {};
 	let resourceStates = {};
 
@@ -215,7 +223,9 @@ window.ResourceLoader = (() => {
 
 			resourceStates[url] = "loading";
 
-			const isLocalResource = url.startsWith(window.location.origin);
+			const isLocalResource =
+				!!(root.location && root.location.origin) &&
+				url.startsWith(root.location.origin);
 
 			const fileType = getFileType(url);
 
@@ -487,7 +497,7 @@ window.ResourceLoader = (() => {
 					deferScriptsUntilReady &&
 					document.readyState !== "complete"
 				) {
-					window.addEventListener("DOMContentLoaded", () => {
+					root.addEventListener("DOMContentLoaded", () => {
 						log(
 							`Deferring script load until DOM ready: ${finalUrl}`,
 							"verbose"
@@ -600,4 +610,4 @@ window.ResourceLoader = (() => {
 		getResourceState,
 		setLoggingLevel,
 	};
-})();
+});
