@@ -1,11 +1,40 @@
 {
 	"name": "resourceloader-js",
 	"version": "1.0.0",
-	"private": true,
-	"description": "Tests for ResourceLoader.js",
+	"description": "A flexible JavaScript library for dynamic resource loading",
+	"main": "resourceLoader.js",
+	"browser": "resourceLoader.js",
+	"unpkg": "resourceLoader.js",
+	"jsdelivr": "resourceLoader.js",
+	"exports": {
+		".": "./resourceLoader.js"
+	},
+	"files": [
+		"resourceLoader.js",
+		"README.md",
+		"LICENSE"
+	],
+	"keywords": [
+		"resource-loader",
+		"script-loader",
+		"css-loader",
+		"dynamic-loading",
+		"javascript"
+	],
+	"author": "Peter Benoit",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/peterbenoit/ResourceLoader.js.git"
+	},
+	"bugs": {
+		"url": "https://github.com/peterbenoit/ResourceLoader.js/issues"
+	},
+	"homepage": "https://github.com/peterbenoit/ResourceLoader.js#readme",
 	"scripts": {
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"prepublishOnly": "npm test"
 	},
 	"devDependencies": {
 		"jsdom": "^24.1.3",
