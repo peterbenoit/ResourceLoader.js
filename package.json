@@ -37,7 +37,10 @@
 		"pack:dry-run": "npm pack --dry-run",
 		"prepublishOnly": "npm test && npm run pack:dry-run",
 		"release": "node scripts/release.js",
-		"release:patch": "node scripts/release.js --bump patch"
+		"release:patch": "node scripts/release.js --bump patch",
+		"release:minor": "node scripts/release.js --bump minor",
+		"release:major": "node scripts/release.js --bump major",
+		"release:publish": "node scripts/release.js --bump patch --publish"
 	},
 	"devDependencies": {
 		"jsdom": "^24.1.3",

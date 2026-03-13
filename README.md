@@ -229,10 +229,21 @@ npm test
 Run the automated release helper from the repository root:
 
 ```bash
-npm run release -- --bump patch
+npm run release
 ```
 
-Publish in the same flow:
+No-flag mode starts an interactive wizard where you choose bump type and whether to publish.
+
+Shortcut commands:
+
+```bash
+npm run release:patch
+npm run release:minor
+npm run release:major
+npm run release:publish
+```
+
+Flag-driven mode is still available:
 
 ```bash
 npm run release -- --bump patch --publish

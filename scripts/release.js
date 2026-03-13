@@ -71,7 +71,36 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-	console.log(`\nProject-agnostic npm release helper\n\nUsage:\n  node scripts/release.js --bump <patch|minor|major|prerelease|x.y.z> [--publish] [--yes]\n\nOptions:\n  --bump <value>   Version bump target (default: patch)\n  --publish        Run npm publish after version bump and push\n  --yes, -y        Skip final confirmation prompt\n  --skip-login     Skip npm auth check/login\n  --skip-tests     Skip npm test\n  --skip-pack      Skip npm pack --dry-run step\n  --skip-push      Skip git push --follow-tags\n  --help, -h       Show this help\n\nExamples:\n  node scripts/release.js --bump patch\n  node scripts/release.js --bump minor --publish\n  node scripts/release.js --bump 2.0.0 --publish --yes\n`);
+	console.log(`\nProject-agnostic npm release helper\n\nUsage:\n  node scripts/release.js\n  node scripts/release.js --bump <patch|minor|major|prerelease|x.y.z> [--publish] [--yes]\n\nNo-arg mode:\n  Running with no flags starts an interactive wizard for bump + publish choices.\n\nOptions:\n  --bump <value>   Version bump target (default: patch)\n  --publish        Run npm publish after version bump and push\n  --yes, -y        Skip final confirmation prompt\n  --skip-login     Skip npm auth check/login\n  --skip-tests     Skip npm test\n  --skip-pack      Skip npm pack --dry-run step\n  --skip-push      Skip git push --follow-tags\n  --help, -h       Show this help\n\nExamples:\n  node scripts/release.js\n  node scripts/release.js --bump minor --publish\n  node scripts/release.js --bump 2.0.0 --publish --yes\n`);
+}
+
+async function interactiveNoArgsSetup(options) {
+	const rl = readline.createInterface({
+		input: process.stdin,
+		output: process.stdout,
+	});
+
+	try {
+		const bumpInput = (
+			await rl.question(
+				"Select version bump [patch/minor/major/prerelease or x.y.z] (default: patch): "
+			)
+		)
+			.trim()
+			.toLowerCase();
+
+		if (bumpInput) {
+			options.bump = bumpInput;
+		}
+
+		const publishInput = (await rl.question("Publish to npm after push? [y/N]: "))
+			.trim()
+			.toLowerCase();
+
+		options.publish = publishInput === "y" || publishInput === "yes";
+	} finally {
+		rl.close();
+	}
 }
 
 function ensureGitClean() {
@@ -262,10 +291,15 @@ function printCdnUrls(pkg, version) {
 }
 
 async function main() {
-	const options = parseArgs(process.argv.slice(2));
+	const argv = process.argv.slice(2);
+	const options = parseArgs(argv);
 	if (options.help) {
 		printHelp();
 		return;
+	}
+
+	if (argv.length === 0) {
+		await interactiveNoArgsSetup(options);
 	}
 
 	const { pkg } = readPackageJson();
