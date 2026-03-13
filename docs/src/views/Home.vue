@@ -136,14 +136,23 @@ ResourceLoader.include([
 				<h2 class="text-3xl font-bold mb-8 text-center">Quick Start</h2>
 				<div class="max-w-3xl mx-auto">
 					<div class="mb-8">
-						<h3 class="text-xl font-semibold mb-4">1. Include the library</h3>
+						<h3 class="text-xl font-semibold mb-4">1. Install with npm (optional)</h3>
+						<div class="bg-white p-4 rounded-md shadow-md">
+							<pre class="text-sm overflow-x-auto"><code>npm install resourceloader-js</code></pre>
+						</div>
+					</div>
+					<div class="mb-8">
+						<h3 class="text-xl font-semibold mb-4">2. Include the library from CDN</h3>
+						<div class="bg-white p-4 rounded-md shadow-md mb-4">
+							<pre class="text-sm overflow-x-auto"><code>&lt;script src="https://cdn.jsdelivr.net/npm/resourceloader-js@1.0.1/resourceLoader.js"&gt;&lt;/script&gt;</code></pre>
+						</div>
 						<div class="bg-white p-4 rounded-md shadow-md">
 							<pre
 								class="text-sm overflow-x-auto"><code>&lt;script src="path/to/ResourceLoader.js"&gt;&lt;/script&gt;</code></pre>
 						</div>
 					</div>
 					<div class="mb-8">
-						<h3 class="text-xl font-semibold mb-4">2. Load resources</h3>
+						<h3 class="text-xl font-semibold mb-4">3. Load resources</h3>
 						<div class="bg-white p-4 rounded-md shadow-md">
 							<pre class="text-sm overflow-x-auto"><code>ResourceLoader.include([
   'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js',

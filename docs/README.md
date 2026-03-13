@@ -2,6 +2,32 @@
 
 This is the documentation site for ResourceLoader.js, a flexible JavaScript library for dynamically loading resources.
 
+## Library Usage (NPM + CDN)
+
+Install from npm:
+
+```bash
+npm install resourceloader-js
+```
+
+Use from jsDelivr CDN (pinned):
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/resourceloader-js@1.0.1/resourceLoader.js"></script>
+```
+
+Use from jsDelivr CDN (latest):
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/resourceloader-js/resourceLoader.js"></script>
+```
+
+Use from unpkg CDN (pinned):
+
+```html
+<script src="https://unpkg.com/resourceloader-js@1.0.1/resourceLoader.js"></script>
+```
+
 ## Development
 
 To run the documentation site locally:
