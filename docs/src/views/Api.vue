@@ -44,8 +44,25 @@
 						</div>
 
 						<h3 class="text-lg font-semibold mt-6 mb-2">Returns</h3>
-						<p><em>Promise</em> - Resolves when all resources are loaded, rejects if any resource fails to
-							load.</p>
+						<p><em>Promise</em> - Resolves with per-resource result objects when all resources are loaded,
+							rejects with an aggregate error if any resource fails.</p>
+
+						<div class="bg-gray-50 p-4 rounded-md mt-4 mb-4">
+							<pre class="text-sm overflow-x-auto"><code>// Resolve value when all resources succeed
+[
+  { status: 'fulfilled', value: 'https://example.com/script.js' }
+]
+
+// Rejection shape when one or more resources fail
+{
+  type: 'aggregate',
+  message: 'One or more resources failed to load.',
+  results: [
+    { status: 'fulfilled', value: 'https://example.com/good.css' },
+    { status: 'rejected', reason: { type: 'network', message: '...' }, url: 'https://example.com/bad.css' }
+  ]
+}</code></pre>
+						</div>
 
 						<h3 class="text-lg font-semibold mt-6 mb-4">Examples</h3>
 

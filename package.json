@@ -1,0 +1,14 @@
+{
+	"name": "resourceloader-js",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Tests for ResourceLoader.js",
+	"scripts": {
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"devDependencies": {
+		"jsdom": "^24.1.3",
+		"vitest": "^2.1.8"
+	}
+}

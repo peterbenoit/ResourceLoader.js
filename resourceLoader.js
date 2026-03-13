@@ -76,11 +76,18 @@ window.ResourceLoader = (() => {
 				"png",
 				"gif",
 				"svg",
+				"webp",
 				"woff",
 				"woff2",
 				"pdf",
 				"zip",
 				"bin",
+				"mp3",
+				"mp4",
+				"avi",
+				"webm",
+				"ogg",
+				"wav",
 			].includes(fileType)
 		) {
 			return {
@@ -170,6 +177,37 @@ window.ResourceLoader = (() => {
 			return priorityB - priorityA;
 		});
 
+		const getFileType = (url) => {
+			const urlWithoutParams = url.split("?")[0].split("#")[0];
+			const extension = urlWithoutParams.split(".").pop().toLowerCase();
+
+			if (
+				extension &&
+				extension.length <= 5 &&
+				extension !== urlWithoutParams
+			) {
+				return extension;
+			}
+
+			if (
+				url.includes("/json") ||
+				url.includes("jsonplaceholder") ||
+				url.includes("api")
+			) {
+				return "json";
+			}
+
+			if (
+				url.includes("/images") ||
+				url.includes("picsum") ||
+				url.includes("/img")
+			) {
+				return "png";
+			}
+
+			return extension;
+		};
+
 		const loadResource = (url, retryCount = 0) => {
 			if (resourceLoadedPromises[url]) {
 				return resourceLoadedPromises[url].promise;
@@ -178,28 +216,6 @@ window.ResourceLoader = (() => {
 			resourceStates[url] = "loading";
 
 			const isLocalResource = url.startsWith(window.location.origin);
-
-			// Improved file type detection
-			const getFileType = (url) => {
-				// First, try to get extension from URL path (before query parameters)
-				const urlWithoutParams = url.split("?")[0].split("#")[0];
-				const extension = urlWithoutParams.split(".").pop().toLowerCase();
-
-				// Check if extension is valid and not the entire domain/path
-				if (extension && extension.length <= 4 && extension !== urlWithoutParams) {
-					return extension;
-				}
-
-				// If no valid extension found, infer type from URL patterns
-				if (url.includes("/json") || url.includes("jsonplaceholder") || url.includes("api")) {
-					return "json";
-				} else if (url.includes("/images") || url.includes("picsum") || url.includes("/img")) {
-					return "png"; // Default image type
-				}
-
-				// Default or unknown
-				return extension;
-			};
 
 			const fileType = getFileType(url);
 
@@ -213,296 +229,278 @@ window.ResourceLoader = (() => {
 			const controller = new AbortController();
 			const { signal } = controller;
 
-			let cancel;
+			const scheduleRetry = (resolve, reject) => {
+				if (retryCount < retries) {
+					log(`Retrying to load resource: ${finalUrl}`, "warn");
+					delete resourceLoadedPromises[url];
+					setTimeout(() => {
+						loadResource(url, retryCount + 1)
+							.then(resolve)
+							.catch(reject);
+					}, retryDelay);
+					return true;
+				}
+
+				return false;
+			};
+
+			const handleFailure = (categorizedError, resolve, reject) => {
+				resourceStates[url] = "unloaded";
+				if (onError) onError(categorizedError, url);
+				if (!scheduleRetry(resolve, reject)) {
+					reject(categorizedError);
+				}
+			};
+
 			let timedOut = false;
 			let startedLoading = false;
 
-			return (resourceLoadedPromises[url] = {
-				promise: new Promise((resolve, reject) => {
-					const loadScriptWhenReady = () => {
-						const existingElement =
-							document.head.querySelector(
-								`[src="${finalUrl}"], [href="${finalUrl}"]`
-							) ||
-							document.body.querySelector(
-								`[src="${finalUrl}"], [href="${finalUrl}"]`
+			const promiseEntry = { cancel: null };
+			let rejectPromise;
+			promiseEntry.promise = new Promise((resolve, reject) => {
+				rejectPromise = reject;
+				const loadScriptWhenReady = () => {
+					const existingElement =
+						document.head.querySelector(
+							`[src="${finalUrl}"], [href="${finalUrl}"]`
+						) ||
+						document.body.querySelector(
+							`[src="${finalUrl}"], [href="${finalUrl}"]`
+						);
+					if (existingElement) {
+						log(`Resource already loaded: ${finalUrl}`, "verbose");
+						resourceStates[url] = "loaded";
+						resolve(finalUrl);
+						return;
+					}
+
+					let element;
+					let timeoutId;
+
+					const handleTimeout = () => {
+						timedOut = true;
+						const error = new Error(`Timeout while loading: ${finalUrl}`);
+						const categorizedError = categorizeError(
+							error,
+							fileType,
+							finalUrl
+						);
+						if (element && startedLoading) {
+							element.remove();
+							log(
+								`Resource load aborted due to timeout: ${finalUrl}`,
+								"warn"
 							);
-						if (existingElement) {
-							log(`Resource already loaded: ${finalUrl}`, "verbose");
-							resourceStates[url] = "loaded";
-							resolve(finalUrl);
-							return;
 						}
-
-						let element;
-						let timeoutId;
-
-						const handleTimeout = () => {
-							timedOut = true;
-							const error = new Error(`Timeout while loading: ${finalUrl}`);
-							const categorizedError = categorizeError(
-								error,
-								fileType,
-								finalUrl
-							);
-							reject(categorizedError);
-							resourceStates[url] = "unloaded";
-							if (element && startedLoading) {
-								element.remove();
-								log(
-									`Resource load aborted due to timeout: ${finalUrl}`,
-									"warn"
-								);
-							}
-							if (retryCount < retries) {
-								log(`Retrying to load resource: ${finalUrl}`, "warn");
-								setTimeout(() => {
-									loadResource(url, retryCount + 1)
-										.then(resolve)
-										.catch(reject);
-								}, retryDelay);
-							}
-						};
-
-						switch (fileType) {
-							case "js":
-								element = document.createElement("script");
-								element.src = finalUrl;
-								element.async = true;
-								if (crossorigin) {
-									element.crossOrigin = crossorigin;
-								}
-								break;
-							case "css":
-								element = document.createElement("link");
-								element.href = finalUrl;
-								element.rel = "stylesheet";
-								if (crossorigin) {
-									element.crossOrigin = crossorigin;
-								}
-								break;
-							case "json":
-								fetch(finalUrl, { signal })
-									.then((response) => {
-										if (!response.ok) {
-											throw new Error(`HTTP error! status: ${response.status}`);
-										}
-										return response.json(); // Ensure the response is parsed as JSON
-									})
-									.then((data) => {
-										if (!timedOut) {
-											resourceStates[url] = "loaded";
-											resolve(data); // Resolve with the JSON data
-											if (onSuccess) onSuccess(data); // Trigger onSuccess
-										}
-									})
-									.catch((error) => {
-										const categorizedError = categorizeError(
-											error,
-											fileType,
-											finalUrl
-										);
-										reject(categorizedError);
-										if (onError) onError(categorizedError, url);
-										if (retryCount < retries) {
-											log(`Retrying to load resource: ${finalUrl}`, "warn");
-											setTimeout(() => {
-												loadResource(url, retryCount + 1)
-													.then(resolve)
-													.catch(reject);
-											}, retryDelay);
-										}
-									});
-								cancel = () => controller.abort();
-								return;
-							case "jpg":
-							case "jpeg":
-							case "png":
-							case "gif":
-							case "svg":
-							case "webp":
-								element = document.createElement("img");
-								element.src = finalUrl;
-								if (crossorigin) {
-									element.crossOrigin = crossorigin;
-								}
-								break;
-							case "woff":
-							case "woff2":
-								const fontFace = new FontFace(
-									"customFont",
-									`url(${finalUrl})`,
-									{
-										crossOrigin: crossorigin,
-									}
-								);
-								fontFace
-									.load()
-									.then(() => {
-										if (!timedOut) {
-											document.fonts.add(fontFace);
-											resourceStates[url] = "loaded";
-											resolve();
-										}
-									})
-									.catch((error) => {
-										const categorizedError = categorizeError(
-											error,
-											fileType,
-											finalUrl
-										);
-										reject(categorizedError);
-										if (onError) onError(categorizedError, url);
-										if (retryCount < retries) {
-											log(`Retrying to load resource: ${finalUrl}`, "warn");
-											setTimeout(() => {
-												loadResource(url, retryCount + 1)
-													.then(resolve)
-													.catch(reject);
-											}, retryDelay);
-										}
-									});
-								return;
-							case "pdf":
-							case "zip":
-							case "bin":
-							case "mp3":
-							case "mp4":
-							case "avi":
-							case "webm":
-							case "ogg":
-							case "wav":
-								fetch(finalUrl, { signal })
-									.then((response) => {
-										console.log("Fetch response status:", response.status);
-										return response.blob();
-									})
-									.then((data) => {
-										console.log("Blob data received:", data);
-										if (!timedOut) {
-											resourceStates[url] = "loaded";
-											resolve(data);
-											if (onSuccess) onSuccess(data); // Invoke onSuccess callback
-										}
-									})
-									.catch((error) => {
-										const categorizedError = categorizeError(
-											error,
-											fileType,
-											finalUrl
-										);
-										reject(categorizedError);
-										if (onError) onError(categorizedError, url);
-										if (retryCount < retries) {
-											log(`Retrying to load resource: ${finalUrl}`, "warn");
-											setTimeout(() => {
-												loadResource(url, retryCount + 1)
-													.then(resolve)
-													.catch(reject);
-											}, retryDelay);
-										}
-									});
-								cancel = () => controller.abort();
-								return;
-							default:
-								const error = new Error(`Unsupported file type: ${fileType}`);
-								reject(error);
-								log(
-									`Failed to load unsupported file type: ${finalUrl}`,
-									"error"
-								);
-								return;
-						}
-
-						applyAttributes(element, attributes, fileType);
-						startedLoading = true;
-						timeoutId = setTimeout(handleTimeout, timeout);
-
-						element.onload = () => {
-							if (!timedOut) {
-								clearTimeout(timeoutId);
-								log(`Resource loaded from: ${finalUrl}`, "verbose");
-								resourceStates[url] = "loaded";
-								resolve();
-								if (onSuccess) onSuccess(url);
-							}
-						};
-
-						element.onerror = () => {
-							clearTimeout(timeoutId);
-
-							const loadError = new Error(
-								`Failed to load resource from: ${finalUrl}`
-							);
-
-							const categorizedError = categorizeError(
-								loadError,
-								fileType,
-								finalUrl
-							);
-
-							reject(categorizedError);
-
-							log(`Failed to load resource from: ${finalUrl}`, "warn");
-
-							resourceStates[url] = "unloaded";
-
-							if (removeFailedElements && element && element.parentNode) {
-								element.parentNode.removeChild(element);
-								log(`Removed failed element: ${finalUrl}`, "verbose");
-							}
-
-							if (onError) onError(categorizedError, url);
-
-							if (retryCount < retries) {
-								log(`Retrying to load resource: ${finalUrl}`, "warn");
-								setTimeout(() => {
-									loadResource(url, retryCount + 1)
-										.then(resolve)
-										.catch(reject);
-								}, retryDelay);
-							}
-						};
-
-						if (element.tagName) {
-							if (appendToBody && fileType === "js") {
-								document.body.appendChild(element);
-							} else {
-								document.head.appendChild(element);
-							}
-						}
-
-						cancel = () => {
-							clearTimeout(timeoutId);
-							if (element && element.parentNode) {
-								element.parentNode.removeChild(element);
-								log(
-									`Loading cancelled and element removed: ${finalUrl}`,
-									"warn"
-								);
-								resourceStates[url] = "unloaded";
-							}
-						};
+						handleFailure(categorizedError, resolve, reject);
 					};
 
-					if (
-						fileType === "js" &&
-						deferScriptsUntilReady &&
-						document.readyState !== "complete"
-					) {
-						window.addEventListener("DOMContentLoaded", () => {
-							log(
-								`Deferring script load until DOM ready: ${finalUrl}`,
-								"verbose"
+					switch (fileType) {
+						case "js":
+							element = document.createElement("script");
+							element.src = finalUrl;
+							element.async = true;
+							if (crossorigin) {
+								element.crossOrigin = crossorigin;
+							}
+							break;
+						case "css":
+							element = document.createElement("link");
+							element.href = finalUrl;
+							element.rel = "stylesheet";
+							if (crossorigin) {
+								element.crossOrigin = crossorigin;
+							}
+							break;
+						case "json":
+							fetch(finalUrl, { signal })
+								.then((response) => {
+									if (!response.ok) {
+										throw new Error(`HTTP error! status: ${response.status}`);
+									}
+									return response.json(); // Ensure the response is parsed as JSON
+								})
+								.then((data) => {
+									if (!timedOut) {
+										resourceStates[url] = "loaded";
+										resolve(data); // Resolve with the JSON data
+										if (onSuccess) onSuccess(data); // Trigger onSuccess
+									}
+								})
+								.catch((error) => {
+									const categorizedError = categorizeError(
+										error,
+										fileType,
+										finalUrl
+									);
+									handleFailure(categorizedError, resolve, reject);
+								});
+							promiseEntry.cancel = () => controller.abort();
+							return;
+						case "jpg":
+						case "jpeg":
+						case "png":
+						case "gif":
+						case "svg":
+						case "webp":
+							element = document.createElement("img");
+							element.src = finalUrl;
+							if (crossorigin) {
+								element.crossOrigin = crossorigin;
+							}
+							break;
+						case "woff":
+						case "woff2":
+							const fontFace = new FontFace(
+								"customFont",
+								`url(${finalUrl})`,
+								{
+									crossOrigin: crossorigin,
+								}
 							);
-							loadScriptWhenReady();
-						});
-					} else {
-						loadScriptWhenReady();
+							fontFace
+								.load()
+								.then(() => {
+									if (!timedOut) {
+										document.fonts.add(fontFace);
+										resourceStates[url] = "loaded";
+										resolve();
+									}
+								})
+								.catch((error) => {
+									const categorizedError = categorizeError(
+										error,
+										fileType,
+										finalUrl
+									);
+									handleFailure(categorizedError, resolve, reject);
+								});
+							return;
+						case "pdf":
+						case "zip":
+						case "bin":
+						case "mp3":
+						case "mp4":
+						case "avi":
+						case "webm":
+						case "ogg":
+						case "wav":
+							fetch(finalUrl, { signal })
+								.then((response) => {
+									console.log("Fetch response status:", response.status);
+									return response.blob();
+								})
+								.then((data) => {
+									console.log("Blob data received:", data);
+									if (!timedOut) {
+										resourceStates[url] = "loaded";
+										resolve(data);
+										if (onSuccess) onSuccess(data); // Invoke onSuccess callback
+									}
+								})
+								.catch((error) => {
+									const categorizedError = categorizeError(
+										error,
+										fileType,
+										finalUrl
+									);
+									handleFailure(categorizedError, resolve, reject);
+								});
+							promiseEntry.cancel = () => controller.abort();
+							return;
+						default:
+							const error = new Error(`Unsupported file type: ${fileType}`);
+							reject(error);
+							log(
+								`Failed to load unsupported file type: ${finalUrl}`,
+								"error"
+							);
+							return;
 					}
-				}),
-				cancel,
-			}).promise;
+
+					applyAttributes(element, attributes, fileType);
+					startedLoading = true;
+					timeoutId = setTimeout(handleTimeout, timeout);
+
+					element.onload = () => {
+						if (!timedOut) {
+							clearTimeout(timeoutId);
+							log(`Resource loaded from: ${finalUrl}`, "verbose");
+							resourceStates[url] = "loaded";
+							resolve();
+							if (onSuccess) onSuccess(url);
+						}
+					};
+
+					element.onerror = () => {
+						clearTimeout(timeoutId);
+
+						const loadError = new Error(
+							`Failed to load resource from: ${finalUrl}`
+						);
+
+						const categorizedError = categorizeError(
+							loadError,
+							fileType,
+							finalUrl
+						);
+
+						log(`Failed to load resource from: ${finalUrl}`, "warn");
+
+						if (removeFailedElements && element && element.parentNode) {
+							element.parentNode.removeChild(element);
+							log(`Removed failed element: ${finalUrl}`, "verbose");
+						}
+
+						handleFailure(categorizedError, resolve, reject);
+					};
+
+					if (element.tagName) {
+						if (appendToBody && fileType === "js") {
+							document.body.appendChild(element);
+						} else {
+							document.head.appendChild(element);
+						}
+					}
+
+					promiseEntry.cancel = () => {
+						clearTimeout(timeoutId);
+						if (element && element.parentNode) {
+							element.parentNode.removeChild(element);
+							log(
+								`Loading cancelled and element removed: ${finalUrl}`,
+								"warn"
+							);
+							resourceStates[url] = "unloaded";
+							if (rejectPromise) {
+								rejectPromise({
+									type: "abort",
+									message: `Loading cancelled for: ${finalUrl}`,
+								});
+							}
+						}
+					};
+				};
+
+				if (
+					fileType === "js" &&
+					deferScriptsUntilReady &&
+					document.readyState !== "complete"
+				) {
+					window.addEventListener("DOMContentLoaded", () => {
+						log(
+							`Deferring script load until DOM ready: ${finalUrl}`,
+							"verbose"
+						);
+						loadScriptWhenReady();
+					});
+				} else {
+					loadScriptWhenReady();
+				}
+			});
+
+			resourceLoadedPromises[url] = promiseEntry;
+			return promiseEntry.promise;
 		};
 
 		function loadWithConcurrencyLimit(resources, loadFn, maxConcurrency) {
@@ -510,11 +508,22 @@ window.ResourceLoader = (() => {
 			const results = [];
 			const total = resources.length;
 
-			return new Promise((resolve) => {
+			return new Promise((resolve, reject) => {
 				const startNext = () => {
 					if (index >= total) {
 						if (results.length === total) {
-							resolve(results);
+							const hasFailures = results.some(
+								(result) => result && result.status === "rejected"
+							);
+							if (hasFailures) {
+								reject({
+									type: "aggregate",
+									message: "One or more resources failed to load.",
+									results,
+								});
+							} else {
+								resolve(results);
+							}
 						}
 						return;
 					}

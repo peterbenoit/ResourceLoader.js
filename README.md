@@ -135,6 +135,27 @@ ResourceLoader.include(['https://example.com/script.js'], {
     -   `crossorigin`: Set cross-origin for JS/CSS resources.
     -   `attributes`: Additional attributes to set on the element (e.g., integrity).
 
+Returns a Promise that resolves with an array of per-resource results when all resources succeed:
+
+```javascript
+[
+    { status: 'fulfilled', value: 'https://example.com/script.js' },
+];
+```
+
+If any resource fails, the Promise rejects with an aggregate error:
+
+```javascript
+{
+    type: 'aggregate',
+    message: 'One or more resources failed to load.',
+    results: [
+        { status: 'fulfilled', value: 'https://example.com/good.css' },
+        { status: 'rejected', reason: { type: 'network', message: '...' }, url: 'https://example.com/bad.css' }
+    ]
+}
+```
+
 ### `unloadResource(url)`
 
 Unloads a resource from the page.
@@ -171,3 +192,12 @@ console.log(state); // "loaded"
 ## License
 
 This project is licensed under the MIT License.
+
+## Testing
+
+Run tests from the repository root:
+
+```bash
+npm install
+npm test
+```
