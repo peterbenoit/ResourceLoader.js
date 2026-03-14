@@ -1,0 +1,660 @@
+/**
+ * ResourceLoader.js Library v1.0.0
+ * https://github.dev/peterbenoit/ResourceLoader.js
+ *
+ * ResourceLoader is a flexible JavaScript library that allows for dynamic loading of
+ * resources like JavaScript, CSS, images, JSON, and other file types. It supports
+ * features like error handling, retries, cache busting, and concurrency control,
+ * making it suitable for various applications.
+ *
+ * Released under the MIT License.
+ *
+ * Copyright (c) 2024 Peter Benoit
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * @author Peter Benoit
+ * @version 1.0.0
+ * @license MIT
+ */
+(function (root, factory) {
+	const instance = factory(root);
+	if (typeof module === "object" && module.exports) {
+		module.exports = instance;
+	}
+	if (root && typeof root === "object") {
+		root.ResourceLoader = instance;
+	}
+})(typeof globalThis !== "undefined" ? globalThis : this, (root) => {
+	let resourceLoadedPromises = {};
+	let resourceStates = {};
+
+	let loggingLevel = "warn";
+
+	function setLoggingLevel(level) {
+		const validLevels = ["silent", "warn", "verbose"];
+		if (validLevels.includes(level)) {
+			loggingLevel = level;
+		} else {
+			console.warn(`Invalid log level: ${level}. Falling back to 'warn'.`);
+			loggingLevel = "warn";
+		}
+	}
+
+	function log(message, level = "verbose") {
+		if (loggingLevel === "verbose" && level === "verbose") {
+			console.log(message);
+		} else if (
+			loggingLevel === "warn" &&
+			(level === "warn" || level === "error")
+		) {
+			console.warn(message);
+		}
+	}
+
+	function categorizeError(error, fileType, url) {
+		if (error.name === "AbortError") {
+			return { type: "abort", message: `Fetch aborted for: ${url}` };
+		} else if (
+			typeof error.message === "string" &&
+			error.message.toLowerCase().includes("timeout")
+		) {
+			return { type: "timeout", message: `Timeout while loading: ${url}` };
+		} else if (
+			fileType &&
+			![
+				"js",
+				"css",
+				"json",
+				"jpg",
+				"jpeg",
+				"png",
+				"gif",
+				"svg",
+				"webp",
+				"woff",
+				"woff2",
+				"pdf",
+				"zip",
+				"bin",
+				"mp3",
+				"mp4",
+				"avi",
+				"webm",
+				"ogg",
+				"wav",
+			].includes(fileType)
+		) {
+			return {
+				type: "unsupported",
+				message: `Unsupported file type: ${fileType} for ${url}`,
+			};
+		} else {
+			return {
+				type: "network",
+				message: `Network error or resource not found: ${url}`,
+			};
+		}
+	}
+
+	function validateSecurityAttributes(element, fileType, attributes) {
+		if (fileType === "js" || fileType === "css") {
+			if (
+				attributes.crossorigin &&
+				!["anonymous", "use-credentials"].includes(attributes.crossorigin)
+			) {
+				log(
+					`Invalid "crossorigin" attribute for ${fileType} resource: ${attributes.crossorigin}. Using default "anonymous".`,
+					"warn"
+				);
+				element.crossOrigin = "anonymous";
+			}
+		}
+
+		if (fileType === "js" || fileType === "css") {
+			if (!attributes.integrity) {
+				log(
+					`"integrity" attribute missing for ${fileType} resource. This is required for secure resource loading.`,
+					"warn"
+				);
+			} else {
+				element.integrity = attributes.integrity;
+			}
+		}
+	}
+
+	function applyAttributes(element, attributes, fileType) {
+		Object.keys(attributes).forEach((key) => {
+			if (key in element) {
+				element.setAttribute(key, attributes[key]);
+			} else {
+				log(
+					`Invalid attribute "${key}" for element type "${element.tagName}". Skipping.`,
+					"warn"
+				);
+			}
+		});
+
+		validateSecurityAttributes(element, fileType, attributes);
+	}
+
+	function include(urls, options = {}) {
+		if (!Array.isArray(urls)) {
+			urls = [urls];
+		}
+
+		const {
+			attributes = {},
+			timeout = 10000,
+			cacheBusting = false,
+			cacheBustingQuery = `?_=${new Date().getTime()}`,
+			cacheBustingTypes = ["js", "css"],
+			restrictCacheBustingToLocal = true,
+			appendToBody = false,
+			crossorigin = false,
+			logLevel = "warn",
+			onError = null,
+			onSuccess = null,
+			retries = 0,
+			retryDelay = 1000,
+			deferScriptsUntilReady = true,
+			batchSize = 5,
+			maxConcurrency = 3,
+			priority = 0,
+			removeFailedElements = true,
+		} = options;
+
+		setLoggingLevel(logLevel);
+
+		const sortedUrls = urls.sort((a, b) => {
+			const priorityA = a.priority || 0;
+			const priorityB = b.priority || 0;
+			return priorityB - priorityA;
+		});
+
+		const getFileType = (url) => {
+			const urlWithoutParams = url.split("?")[0].split("#")[0];
+			const extension = urlWithoutParams.split(".").pop().toLowerCase();
+
+			if (
+				extension &&
+				extension.length <= 5 &&
+				extension !== urlWithoutParams
+			) {
+				return extension;
+			}
+
+			if (
+				url.includes("/json") ||
+				url.includes("jsonplaceholder") ||
+				url.includes("api")
+			) {
+				return "json";
+			}
+
+			if (
+				url.includes("/images") ||
+				url.includes("picsum") ||
+				url.includes("/img")
+			) {
+				return "png";
+			}
+
+			return extension;
+		};
+
+		const loadResource = (url, retryCount = 0) => {
+			if (resourceLoadedPromises[url]) {
+				return resourceLoadedPromises[url].promise;
+			}
+
+			resourceStates[url] = "loading";
+
+			const isLocalResource =
+				!!(root.location && root.location.origin) &&
+				url.startsWith(root.location.origin);
+
+			const fileType = getFileType(url);
+
+			const applyCacheBusting =
+				cacheBusting &&
+				(!restrictCacheBustingToLocal || isLocalResource) &&
+				cacheBustingTypes.includes(fileType);
+
+			const finalUrl = applyCacheBusting ? `${url}${cacheBustingQuery}` : url;
+
+			const controller = new AbortController();
+			const { signal } = controller;
+
+			const scheduleRetry = (resolve, reject) => {
+				if (retryCount < retries) {
+					log(`Retrying to load resource: ${finalUrl}`, "warn");
+					delete resourceLoadedPromises[url];
+					setTimeout(() => {
+						loadResource(url, retryCount + 1)
+							.then(resolve)
+							.catch(reject);
+					}, retryDelay);
+					return true;
+				}
+
+				return false;
+			};
+
+			const handleFailure = (categorizedError, resolve, reject) => {
+				resourceStates[url] = "unloaded";
+				if (onError) onError(categorizedError, url);
+				if (!scheduleRetry(resolve, reject)) {
+					reject(categorizedError);
+				}
+			};
+
+			let timedOut = false;
+			let startedLoading = false;
+
+			const promiseEntry = { cancel: null };
+			let rejectPromise;
+			promiseEntry.promise = new Promise((resolve, reject) => {
+				rejectPromise = reject;
+				const loadScriptWhenReady = () => {
+					const existingElement =
+						document.head.querySelector(
+							`[src="${finalUrl}"], [href="${finalUrl}"]`
+						) ||
+						document.body.querySelector(
+							`[src="${finalUrl}"], [href="${finalUrl}"]`
+						);
+					if (existingElement) {
+						log(`Resource already loaded: ${finalUrl}`, "verbose");
+						resourceStates[url] = "loaded";
+						resolve(finalUrl);
+						return;
+					}
+
+					let element;
+					let timeoutId;
+
+					const clearLoadTimeout = () => {
+						if (timeoutId) {
+							clearTimeout(timeoutId);
+							timeoutId = null;
+						}
+					};
+
+					const startLoadTimeout = () => {
+						timeoutId = setTimeout(handleTimeout, timeout);
+					};
+
+					const handleTimeout = () => {
+						if (timedOut) {
+							return;
+						}
+						timedOut = true;
+						controller.abort();
+						const error = new Error(`Timeout while loading: ${finalUrl}`);
+						const categorizedError = categorizeError(
+							error,
+							fileType,
+							finalUrl
+						);
+						if (element && startedLoading) {
+							element.remove();
+							log(
+								`Resource load aborted due to timeout: ${finalUrl}`,
+								"warn"
+							);
+						}
+						handleFailure(categorizedError, resolve, reject);
+					};
+
+					switch (fileType) {
+						case "js":
+							element = document.createElement("script");
+							element.src = finalUrl;
+							element.async = true;
+							if (crossorigin) {
+								element.crossOrigin = crossorigin;
+							}
+							break;
+						case "css":
+							element = document.createElement("link");
+							element.href = finalUrl;
+							element.rel = "stylesheet";
+							if (crossorigin) {
+								element.crossOrigin = crossorigin;
+							}
+							break;
+						case "json":
+							startLoadTimeout();
+							fetch(finalUrl, { signal })
+								.then((response) => {
+									if (!response.ok) {
+										throw new Error(`HTTP error! status: ${response.status}`);
+									}
+									return response.json(); // Ensure the response is parsed as JSON
+								})
+								.then((data) => {
+									if (!timedOut) {
+										clearLoadTimeout();
+										resourceStates[url] = "loaded";
+										resolve(data); // Resolve with the JSON data
+										if (onSuccess) onSuccess(data); // Trigger onSuccess
+									}
+								})
+								.catch((error) => {
+									if (timedOut) {
+										return;
+									}
+									clearLoadTimeout();
+									const categorizedError = categorizeError(
+										error,
+										fileType,
+										finalUrl
+									);
+									handleFailure(categorizedError, resolve, reject);
+								});
+							promiseEntry.cancel = () => {
+								clearLoadTimeout();
+								controller.abort();
+							};
+							return;
+						case "jpg":
+						case "jpeg":
+						case "png":
+						case "gif":
+						case "svg":
+						case "webp":
+							element = document.createElement("img");
+							element.src = finalUrl;
+							if (crossorigin) {
+								element.crossOrigin = crossorigin;
+							}
+							break;
+						case "woff":
+						case "woff2":
+							startLoadTimeout();
+							const fontFace = new FontFace(
+								"customFont",
+								`url(${finalUrl})`,
+								{
+									crossOrigin: crossorigin,
+								}
+							);
+							fontFace
+								.load()
+								.then(() => {
+									if (!timedOut) {
+										clearLoadTimeout();
+										document.fonts.add(fontFace);
+										resourceStates[url] = "loaded";
+										resolve();
+									}
+								})
+								.catch((error) => {
+									if (timedOut) {
+										return;
+									}
+									clearLoadTimeout();
+									const categorizedError = categorizeError(
+										error,
+										fileType,
+										finalUrl
+									);
+									handleFailure(categorizedError, resolve, reject);
+								});
+							return;
+						case "pdf":
+						case "zip":
+						case "bin":
+						case "mp3":
+						case "mp4":
+						case "avi":
+						case "webm":
+						case "ogg":
+						case "wav":
+							startLoadTimeout();
+							fetch(finalUrl, { signal })
+								.then((response) => {
+									if (!response.ok) {
+										throw new Error(`HTTP error! status: ${response.status}`);
+									}
+									return response.blob();
+								})
+								.then((data) => {
+									if (!timedOut) {
+										clearLoadTimeout();
+										resourceStates[url] = "loaded";
+										resolve(data);
+										if (onSuccess) onSuccess(data); // Invoke onSuccess callback
+									}
+								})
+								.catch((error) => {
+									if (timedOut) {
+										return;
+									}
+									clearLoadTimeout();
+									const categorizedError = categorizeError(
+										error,
+										fileType,
+										finalUrl
+									);
+									handleFailure(categorizedError, resolve, reject);
+								});
+							promiseEntry.cancel = () => {
+								clearLoadTimeout();
+								controller.abort();
+							};
+							return;
+						default:
+							const error = new Error(`Unsupported file type: ${fileType}`);
+							reject(error);
+							log(
+								`Failed to load unsupported file type: ${finalUrl}`,
+								"error"
+							);
+							return;
+					}
+
+					applyAttributes(element, attributes, fileType);
+					startedLoading = true;
+					startLoadTimeout();
+
+					element.onload = () => {
+						if (!timedOut) {
+							clearLoadTimeout();
+							log(`Resource loaded from: ${finalUrl}`, "verbose");
+							resourceStates[url] = "loaded";
+							resolve();
+							if (onSuccess) onSuccess(url);
+						}
+					};
+
+					element.onerror = () => {
+						if (timedOut) {
+							return;
+						}
+						clearLoadTimeout();
+
+						const loadError = new Error(
+							`Failed to load resource from: ${finalUrl}`
+						);
+
+						const categorizedError = categorizeError(
+							loadError,
+							fileType,
+							finalUrl
+						);
+
+						log(`Failed to load resource from: ${finalUrl}`, "warn");
+
+						if (removeFailedElements && element && element.parentNode) {
+							element.parentNode.removeChild(element);
+							log(`Removed failed element: ${finalUrl}`, "verbose");
+						}
+
+						handleFailure(categorizedError, resolve, reject);
+					};
+
+					if (element.tagName) {
+						if (appendToBody && fileType === "js") {
+							document.body.appendChild(element);
+						} else {
+							document.head.appendChild(element);
+						}
+					}
+
+					promiseEntry.cancel = () => {
+						clearLoadTimeout();
+						controller.abort();
+						if (element && element.parentNode) {
+							element.parentNode.removeChild(element);
+							log(
+								`Loading cancelled and element removed: ${finalUrl}`,
+								"warn"
+							);
+							resourceStates[url] = "unloaded";
+							if (rejectPromise) {
+								rejectPromise({
+									type: "abort",
+									message: `Loading cancelled for: ${finalUrl}`,
+								});
+							}
+						}
+					};
+				};
+
+				if (
+					fileType === "js" &&
+					deferScriptsUntilReady &&
+					document.readyState !== "complete"
+				) {
+					root.addEventListener("DOMContentLoaded", () => {
+						log(
+							`Deferring script load until DOM ready: ${finalUrl}`,
+							"verbose"
+						);
+						loadScriptWhenReady();
+					});
+				} else {
+					loadScriptWhenReady();
+				}
+			});
+
+			resourceLoadedPromises[url] = promiseEntry;
+			return promiseEntry.promise;
+		};
+
+		function loadWithConcurrencyLimit(resources, loadFn, maxConcurrency) {
+			let index = 0;
+			const results = [];
+			const total = resources.length;
+
+			return new Promise((resolve, reject) => {
+				const startNext = () => {
+					if (index >= total) {
+						if (results.length === total) {
+							const hasFailures = results.some(
+								(result) => result && result.status === "rejected"
+							);
+							if (hasFailures) {
+								reject({
+									type: "aggregate",
+									message: "One or more resources failed to load.",
+									results,
+								});
+							} else {
+								resolve(results);
+							}
+						}
+						return;
+					}
+
+					const currentIndex = index++;
+					const url = resources[currentIndex];
+
+					loadFn(url)
+						.then(() => {
+							results[currentIndex] = { status: "fulfilled", value: url };
+							startNext();
+						})
+						.catch((error) => {
+							results[currentIndex] = {
+								status: "rejected",
+								reason: error,
+								url,
+							};
+							startNext();
+						});
+				};
+
+				// Start initial batch
+				for (let i = 0; i < Math.min(maxConcurrency, total); i++) {
+					startNext();
+				}
+			});
+		}
+
+		return loadWithConcurrencyLimit(sortedUrls, loadResource, maxConcurrency);
+	}
+
+	function unloadResource(url) {
+		const elements = document.querySelectorAll(
+			`[src="${url}"], [href="${url}"]`
+		);
+		elements.forEach((element) => element.remove());
+
+		if (resourceLoadedPromises[url]) {
+			delete resourceLoadedPromises[url];
+			log(`Resource ${url} unloaded and cache cleared.`, "verbose");
+			resourceStates[url] = "unloaded";
+		}
+	}
+
+	function cancelResource(url) {
+		if (resourceLoadedPromises[url] && resourceLoadedPromises[url].cancel) {
+			resourceLoadedPromises[url].cancel();
+			delete resourceLoadedPromises[url];
+			log(`Resource ${url} loading cancelled.`, "warn");
+			resourceStates[url] = "unloaded";
+		}
+	}
+
+	function cancelAll() {
+		Object.keys(resourceLoadedPromises).forEach((url) => {
+			if (resourceLoadedPromises[url] && resourceLoadedPromises[url].cancel) {
+				resourceLoadedPromises[url].cancel();
+			}
+		});
+		resourceLoadedPromises = {};
+		log("All resource loading operations cancelled.", "warn");
+	}
+
+	function getResourceState(url) {
+		return resourceStates[url] || "unloaded";
+	}
+
+	return {
+		include,
+		unloadResource,
+		cancelResource,
+		cancelAll,
+		getResourceState,
+		setLoggingLevel,
+	};
+});

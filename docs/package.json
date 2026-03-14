@@ -1,0 +1,19 @@
+{
+	"name": "resourceloader-docs",
+	"version": "1.0.0",
+	"private": true,
+	"scripts": {
+		"dev": "cp ../resourceLoader.js public/ && astro dev",
+		"build": "cp ../resourceLoader.js public/ && astro build",
+		"preview": "astro preview",
+		"astro": "astro"
+	},
+	"devDependencies": {
+		"@types/node": "^20.0.0",
+		"typescript": "^5.0.0"
+	},
+	"dependencies": {
+		"@astrojs/starlight": "^0.38.1",
+		"astro": "^6.0.4"
+	}
+}
