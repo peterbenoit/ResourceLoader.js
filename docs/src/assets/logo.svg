@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" fill="none">
+  <rect x="0" y="8" width="24" height="24" rx="4" fill="#3b82f6"/>
+  <path d="M6 20 L12 14 L18 20 L12 26 Z" fill="white"/>
+  <text x="32" y="27" font-family="system-ui, sans-serif" font-weight="700" font-size="18" fill="currentColor">ResourceLoader</text>
+  <text x="166" y="27" font-family="system-ui, sans-serif" font-weight="400" font-size="18" fill="#3b82f6">.js</text>
+</svg>

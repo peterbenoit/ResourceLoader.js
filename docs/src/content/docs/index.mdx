@@ -1,0 +1,122 @@
+---
+title: ResourceLoader.js
+description: A lightweight, zero-dependency JavaScript library for dynamically loading any resource type in the browser.
+template: splash
+hero:
+  tagline: Load JavaScript, CSS, JSON, images, fonts, audio, video, and binary files dynamically — with retries, timeouts, concurrency control, and full Promise support.
+  actions:
+    - text: Get Started
+      link: /getting-started/installation/
+      icon: right-arrow
+      variant: primary
+    - text: API Reference
+      link: /api/include/
+      icon: open-book
+      variant: secondary
+---
+
+import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
+
+## What is ResourceLoader.js?
+
+ResourceLoader.js is a tiny, **zero-dependency** browser library that gives you a single, consistent API for loading any type of web resource on demand. Instead of writing custom loaders for scripts, stylesheets, JSON data, or media files, you use one method — `ResourceLoader.include()` — and get back a Promise.
+
+```html
+<!-- Add to your page -->
+<script src="https://cdn.jsdelivr.net/npm/resourceloader-js/resourceLoader.js"></script>
+```
+
+```js
+// Load anything
+await ResourceLoader.include([
+  'https://example.com/app.css',
+  'https://example.com/app.js',
+  'https://api.example.com/config.json',
+]);
+```
+
+<Aside type="tip" title="Zero dependencies">
+ResourceLoader.js has **no dependencies**. It is a single JavaScript file (~17 KB) that works in any modern browser.
+</Aside>
+
+## Why ResourceLoader.js?
+
+<CardGrid>
+  <Card title="One API for everything" icon="puzzle">
+    Load JS, CSS, JSON, images, fonts, audio, video, PDFs, and more — all through the same `include()` method. No more separate loaders per resource type.
+  </Card>
+  <Card title="Promise-based" icon="approve-check">
+    Full async/await support. The Promise resolves when all resources are loaded, or rejects with detailed error information so you know exactly what failed and why.
+  </Card>
+  <Card title="Built-in resilience" icon="setting">
+    Configurable retries, retry delay, and per-resource timeouts. Automatically handles transient network failures without any extra code.
+  </Card>
+  <Card title="Concurrency control" icon="list-format">
+    Load dozens of resources without overwhelming the browser. Set `maxConcurrency` to limit simultaneous loads and keep performance predictable.
+  </Card>
+  <Card title="State tracking" icon="information">
+    Query any resource's state (`'loading'`, `'loaded'`, `'unloaded'`) at any time. Prevent duplicate loads automatically.
+  </Card>
+  <Card title="Security-first" icon="warning">
+    Built-in support for Subresource Integrity (SRI) hashes and `crossorigin` attributes. The library warns when integrity is missing for cross-origin resources.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```js
+// Load a script, stylesheet, and JSON data all at once
+ResourceLoader.include([
+  'https://cdn.example.com/library.js',
+  'https://cdn.example.com/theme.css',
+  'https://api.example.com/settings.json',
+], {
+  retries: 2,
+  timeout: 8000,
+  onSuccess: (data) => {
+    // Called for each resource as it finishes
+    // For JSON: data is the parsed object
+    // For JS/CSS/images: data is the URL string
+  },
+  onError: (error, url) => {
+    console.error(`Failed to load ${url}:`, error.message);
+  },
+})
+.then((results) => {
+  console.log('All resources loaded!', results);
+})
+.catch((error) => {
+  console.error('One or more resources failed:', error);
+});
+```
+
+## Installation
+
+**CDN (fastest to get started):**
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/resourceloader-js/resourceLoader.js"></script>
+```
+
+**npm:**
+
+```sh
+npm install resourceloader-js
+```
+
+See the [Installation guide](/getting-started/installation/) for all options, including pinned versions and unpkg.
+
+## Supported Resource Types
+
+| Type | Extensions |
+|------|-----------|
+| Scripts | `js` |
+| Stylesheets | `css` |
+| Data | `json` |
+| Images | `jpg`, `jpeg`, `png`, `gif`, `svg`, `webp` |
+| Fonts | `woff`, `woff2` |
+| Audio | `mp3`, `ogg`, `wav` |
+| Video | `mp4`, `avi`, `webm` |
+| Binary / PDF | `pdf`, `zip`, `bin` |
+
+See [Supported File Types](/reference/supported-types/) for the full reference including how each type is loaded.

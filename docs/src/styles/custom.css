@@ -1,0 +1,25 @@
+:root {
+  --sl-color-accent-low: #1e3a5f;
+  --sl-color-accent: #3b82f6;
+  --sl-color-accent-high: #93c5fd;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #dbeafe;
+  --sl-color-accent: #2563eb;
+  --sl-color-accent-high: #1d4ed8;
+}
+
+/* Tighten up table cells slightly */
+.sl-markdown-content table th,
+.sl-markdown-content table td {
+  padding: 0.5rem 0.75rem;
+}
+
+/* Inline code style */
+.sl-markdown-content :not(pre) > code {
+  background-color: var(--sl-color-bg-inline-code);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.875em;
+}
