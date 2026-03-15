@@ -3,4 +3,5 @@ docs/package-lock.json
 *.log
 CDN.*
 a*.md
+o*.md
 .DS_Store
