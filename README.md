@@ -215,6 +215,9 @@ console.log(state); // "loaded"
 
 This project is licensed under the MIT License.
 
+---
+Created by [Peter Benoit](https://peterbenoit.com)
+
 ## Testing
 
 Run tests from the repository root:
