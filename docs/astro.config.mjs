@@ -6,8 +6,11 @@ export default defineConfig({
 		starlight({
 			title: 'ResourceLoader.js',
 			description: 'A lightweight, zero-dependency JavaScript library for dynamically loading any resource type in the browser.',
-			social: {
-				github: 'https://github.com/peterbenoit/ResourceLoader.js',
+			social: [
+				{ icon: 'github', label: 'GitHub', href: 'https://github.com/peterbenoit/ResourceLoader.js' },
+			],
+			components: {
+				Footer: './src/components/Footer.astro',
 			},
 			customCss: [
 				// Load custom styles if available
