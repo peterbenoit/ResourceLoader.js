@@ -44,7 +44,10 @@ export default defineConfig({
 						property: 'og:type',
 						content: 'website',
 					}
-				}
+				},
+				// Google Analytics
+				{ tag: 'script', attrs: { src: 'https://www.googletagmanager.com/gtag/js?id=G-GQEC09BG5Z', async: true } },
+				{ tag: 'script', content: "window.dataLayer = window.dataLayer || []; function gtag() { dataLayer.push(arguments); } gtag('js', new Date()); gtag('config', 'G-GQEC09BG5Z');" },
 			],
 			sidebar: [
 				{
