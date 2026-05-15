@@ -30,7 +30,7 @@
 	"bugs": {
 		"url": "https://github.com/peterbenoit/ResourceLoader.js/issues"
 	},
-	"homepage": "https://github.com/peterbenoit/ResourceLoader.js#readme",
+	"homepage": "https://peterbenoit.com/resourceloader/",
 	"scripts": {
 		"test": "vitest run",
 		"test:watch": "vitest",
